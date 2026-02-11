@@ -4,7 +4,7 @@
 #define RND drand48()
 
 #define NMITO 200    // number of mitochondria
-#define MAXT 100    // timescale
+#define MAXT 1000   // timescale
 #define NSAMP 100   // number of samples per expt
 #define NSUBS 5
 #define DNA NSUBS
@@ -402,7 +402,7 @@ int main(void)
 				    else
 				      Push(&(M[r]), DNA, 0);
 				  }
-				for(t = 0; t < MAXT; t++)
+				for(t = 0; t <= MAXT; t++)
 				  {
 				    // produce new subunits
 				    for(i = 0; i < EXPRESSION; i++)
@@ -485,26 +485,29 @@ int main(void)
       
 				    // output state
 				    //Query(N);
-				    completes = completes2 = avprot = avdna = avprotempty = avprotfull = 0;
-				    for(i = 0; i < NMITO; i++)
+				    if(t == 100 || t == 1000)
 				      {
-					//	  printf("  ");
-					completes += Query(M[i], QUERY_NUCLEOPROTEIN);
-					completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
-					avprot += M[i].copies[0];
-					avdna += M[i].copies[DNA];
-					avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
-					avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
+					completes = completes2 = avprot = avdna = avprotempty = avprotfull = 0;
+					for(i = 0; i < NMITO; i++)
+					  {
+					    //	  printf("  ");
+					    completes += Query(M[i], QUERY_NUCLEOPROTEIN);
+					    completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
+					    avprot += M[i].copies[0];
+					    avdna += M[i].copies[DNA];
+					    avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
+					    avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
+					  }
+				    
+					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO);
 				      }
 				  }
-				fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO);
-
 			      }
-			  }
+			   }
 			}
-		    }
+		     } 
 		  }
-		}
+	       }
 	    }
 	}
     }
