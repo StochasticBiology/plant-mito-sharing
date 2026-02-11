@@ -143,6 +143,8 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
       q1 = Query(*C1, (mtype == SWAP_NUCLEOPROTEIN ? QUERY_NUCLEOPROTEIN : QUERY_COMPLEX));
       q2 = Query(*C2, (mtype == SWAP_NUCLEOPROTEIN ? QUERY_NUCLEOPROTEIN : QUERY_COMPLEX));
 
+      //   printf("%i %i\n", q1, q2);
+      
       // first partition complexes from C1
       for(j = 0; j < q1; j++)
 	{
@@ -291,12 +293,12 @@ void RunTest(void)
  
   
   printf("Testing mixing 1...\n");
-  for(i = 0; i <= 3; i++)
+  for(i = 0; i <= 10; i++)
     {
       Create(&C1, 0,0,0,0,0,1, 5);
       Create(&C2, 3,3,3,3,3,3, 7);
 
-      Mix(&C1, &C2, i);
+      Mix(&C2, &C1, SWAP_NUCLEOPROTEIN);
       printf("-- %i\n", i);
       Output(C1); Output(C2);
       printf("\n");
@@ -326,7 +328,7 @@ int main(void)
   FILE *fp;
   int TARGET, SWAP, SOCIAL, POISSON;
   int rep;
-  int avprot, avdna, avprotempty, avprotfull;
+  int avprot, avdna, avprotempty, avprotfull, maxdna;
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -343,9 +345,9 @@ int main(void)
   // compare to: average proteins per mito (2-20), average DNAs per mito (0.5), timescale of spread through chondriome (hours), protein lifespan (days)
   // and distributions thereof!
 
-  //RunTest();
-
-  //  return 0;
+  srand48(112);
+  RunTest();
+  //return 0;
 
   // say we have 10min as a time unit
   // NFUSE fusions -> each mito undergoes 2*NFUSE/NMITO fusions per unit time, so connected in NMITO/(2*NFUSE) timesteps
@@ -363,7 +365,7 @@ int main(void)
   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
   
   fp = fopen("sim-out-new.csv", "w");
-  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull\n");
+  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna\n");
 
   for(POISSON = 0; POISSON <= 1; POISSON++)
     {
@@ -485,9 +487,9 @@ int main(void)
       
 				    // output state
 				    //Query(N);
-				    if(t == 100 || t == 1000)
+				    if(t == 100 || t == 900 || t == 1000)
 				      {
-					completes = completes2 = avprot = avdna = avprotempty = avprotfull = 0;
+					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = 0;
 					for(i = 0; i < NMITO; i++)
 					  {
 					    //	  printf("  ");
@@ -497,9 +499,10 @@ int main(void)
 					    avdna += M[i].copies[DNA];
 					    avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
 					    avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
+					    if(M[i].copies[DNA] > maxdna) maxdna = M[i].copies[DNA];
 					  }
 				    
-					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO);
+					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna);
 				      }
 				  }
 			      }
