@@ -39,15 +39,15 @@ df_mean <- df[df$swap == "None" & df$social == "All mitos",] %>%
     avprotfull = mean(avprotfull, na.rm=TRUE),
     .groups = "drop"
   )
-ggplot(df_mean, aes(x = target, y = completes, color=factor(meanprot))) + 
+ggplot(df_mean, aes(x = target, y = completes, shape = factor(poisson), color=factor(meanprot))) + 
   geom_point() + theme(axis.text.x = element_text(angle=90))
-ggplot(df_mean, aes(x = target, y = avprotempty, color=factor(meanprot))) + 
+ggplot(df_mean, aes(x = target, y = avprotempty, shape = factor(poisson), color=factor(meanprot))) + 
   geom_point() + theme(axis.text.x = element_text(angle=90))
-ggplot(df_mean, aes(x = target, y = avprotfull, color=factor(meanprot))) + 
+ggplot(df_mean, aes(x = target, y = avprotfull, shape = factor(poisson), color=factor(meanprot))) + 
   geom_point() + theme(axis.text.x = element_text(angle=90))
 # ^ targetting 1 and 3 usually best -- only those with DNA
 # this one should still be zero as DNAs can never meet
-ggplot(df_mean, aes(x = target, y = completes2, color=factor(expression))) + 
+ggplot(df_mean, aes(x = target, y = completes2, shape = factor(poisson), color=factor(expression))) + 
   geom_point() 
 
 # next question -- with random targetting, how does different exchange influence completeness 
@@ -63,9 +63,9 @@ df_mean <- df[df$target == "Random" & df$nfuse == 100,] %>%
     avprotfull = mean(avprotfull, na.rm=TRUE),
     .groups = "drop"
   )
-ggplot(df_mean, aes(x = swap, y = completes, color=factor(meanprot))) + 
+ggplot(df_mean, aes(x = swap, y = completes, shape = factor(poisson), color=factor(meanprot))) + 
   geom_point() + facet_wrap(~ social) + theme(axis.text.x = element_text(angle=90))
-ggplot(df_mean, aes(x = swap, y = completes2, color=factor(meanprot))) + 
+ggplot(df_mean, aes(x = swap, y = completes2, shape = factor(poisson), color=factor(meanprot))) + 
   geom_point() + facet_wrap(~ social) + theme(axis.text.x = element_text(angle=90))
 # ^ swapping only between mtDNA-holding mitos helps a lot
 
@@ -80,8 +80,11 @@ df_mean <- df[df$nfuse == 100,] %>%
     avdna = mean(avdna, na.rm=TRUE),
     .groups = "drop"
   )
-ggplot(df_mean, aes(x=target, y=swap, fill=completes)) + 
+ggplot(df_mean[df_mean$poisson==1,], aes(x=target, y=swap, fill=completes)) + 
   geom_tile() + facet_grid(expression ~ social) + theme(axis.text.x = element_text(angle = 90)) 
+ggplot(df_mean[df_mean$poisson==0,], aes(x=target, y=swap, fill=completes)) + 
+  geom_tile() + facet_grid(expression ~ social) + theme(axis.text.x = element_text(angle = 90)) 
+
 ggplot(df_mean, aes(x=target, y=swap, fill=completes2)) + 
   geom_tile() + facet_grid(expression ~ social) + theme(axis.text.x = element_text(angle = 90)) 
 
