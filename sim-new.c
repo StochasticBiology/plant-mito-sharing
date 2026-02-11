@@ -17,17 +17,20 @@ int LIFE;        // subunit lifespan
 int EXPRESSION;  // expression rate
 int IMPORT;      // nucleus-mito import rate
 
+// different output statistics for a mitochondrion
 #define QUERY_COMPLEX 0
 #define QUERY_NUCLEOPROTEIN 1
 #define QUERY_MULTIPLE_DNA_COMPLEX 2
 #define QUERY_DNA 3
 
+// different rules for targetted protein import
 #define TARGET_RANDOM 0
 #define TARGET_DNA_BEARING 1
 #define TARGET_NO_NUCLEOPROTEIN 2
 #define TARGET_DNA_NO_COMPLEX 3
 #define TARGET_RANDOM_BATCH 4
 
+// different rules for sharing content upon fusion
 #define SWAP_NONE 0
 #define SWAP_SUBUNITS 1
 #define SWAP_SUBUNITS_DNA 2
@@ -321,7 +324,7 @@ int main(void)
   int r, k, m1, m2;
   int completes, completes2;
   FILE *fp;
-  int TARGET, SWAP, SOCIAL;
+  int TARGET, SWAP, SOCIAL, POISSON;
   int rep;
   int avprot, avdna, avprotempty, avprotfull;
   
@@ -360,143 +363,148 @@ int main(void)
   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
   
   fp = fopen("sim-out-new.csv", "w");
-  fprintf(fp, "target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull\n");
+  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull\n");
 
-  for(TARGET = 0; TARGET <= 4; TARGET++)
+  for(POISSON = 0; POISSON <= 1; POISSON++)
     {
-      for(SOCIAL = 0; SOCIAL <= 1; SOCIAL++)
+      for(TARGET = 0; TARGET <= 4; TARGET++)
 	{
-	  for(SWAP = 0; SWAP <= 4; SWAP++)
+	  for(SOCIAL = 0; SOCIAL <= 1; SOCIAL++)
 	    {
-	      NFUSE = NMITO/2;
-	      // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
-	      {
-		LIFE = 30;
-		//	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
+	      for(SWAP = 0; SWAP <= 4; SWAP++)
 		{
-		  for(EXPRESSION = 100; EXPRESSION <= 1000; EXPRESSION *= 10)
+		  NFUSE = NMITO/2;
+		  // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
+		  {
+		    LIFE = 30;
+		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 		    {
-		      IMPORT = EXPRESSION;
-		      //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
+		      for(EXPRESSION = 100; EXPRESSION <= 1000; EXPRESSION *= 10)
 			{
-			  printf("%i,%i,%i,%i,%i,%i,%i\n", TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT);
-			  for(rep = 0; rep < NREP; rep++)
-			    {
-			      // empty nucleus
-			      for(i = 0; i < NMITO; i++)
-				Empty(&N);
-			      // empty all mitos
-			      for(i = 0; i < NMITO; i++)
-				Empty(&(M[i]));
-			      // push mtDNA into some mitos
-			      for(i = 0; i < NMITO/2; i++)
-				{
-				  r = RND*NMITO;
-			  	  //Push(&(M[r]), DNA, 0);
-				  Push(&(M[i]), DNA, 0);
-				}
-			      for(t = 0; t < MAXT; t++)
-				{
-				  // produce new subunits
-				  for(i = 0; i < EXPRESSION; i++)
-				    {
-				      r = RND*NSUBS;
-				      Push(&N, r, t);
-				    }
-				  //printf("  import\n");
-				  // transfer random nuclear content to random mito
-				  m1 = RND*NMITO;
-				  for(i = 0; i < IMPORT; i++)
-				    {
-				      r = RND*NSUBS;
-				      k = RND*N.copies[r];
-				      completes = 0;
-				      switch(TARGET)
-					{
-					  // just pick a random mito
-					case 0: m1 = RND*NMITO; break;
-					  // pick a random mito with DNA
-					case 1: 
-					  do{
-					    m1 = RND*NMITO;
-					  }while(!(M[m1].copies[DNA] != 0)); break;
-					  // pick a random mito without a DNA-complex
-					case 2:
-					  do{
-					    m1 = RND*NMITO;
-					    completes++;
-					  }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
-					  // pick a random mito with DNA and without a DNA-complex
-					case 3:
-					  do{
-					    m1 = RND*NMITO;
-					    completes++;
-					  }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
-					  // same mito gets all content
-					case 4: break;
-					}
-				      if(completes < 10)
-				        Transfer(&N, &(M[m1]), r, k);
-				    }
-				  // fuse and exchange
-				  //printf("  fusion\n");
+			  IMPORT = EXPRESSION;
+			  //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
+			  {
+			    printf("%i,%i,%i,%i,%i,%i,%i\n", TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT);
+			    for(rep = 0; rep < NREP; rep++)
+			      {
+				// empty nucleus
+				for(i = 0; i < NMITO; i++)
+				  Empty(&N);
+				// empty all mitos
+				for(i = 0; i < NMITO; i++)
+				  Empty(&(M[i]));
+				// push mtDNA into some mitos
+				for(i = 0; i < NMITO/2; i++)
+				  {
+				    r = RND*NMITO;
+				    if(POISSON == 0)
+				      Push(&(M[i]), DNA, 0);
+				    else
+				      Push(&(M[r]), DNA, 0);
+				  }
+				for(t = 0; t < MAXT; t++)
+				  {
+				    // produce new subunits
+				    for(i = 0; i < EXPRESSION; i++)
+				      {
+					r = RND*NSUBS;
+					Push(&N, r, t);
+				      }
+				    //printf("  import\n");
+				    // transfer random nuclear content to random mito
+				    m1 = RND*NMITO;
+				    for(i = 0; i < IMPORT; i++)
+				      {
+					r = RND*NSUBS;
+					k = RND*N.copies[r];
+					completes = 0;
+					switch(TARGET)
+					  {
+					    // just pick a random mito
+					  case 0: m1 = RND*NMITO; break;
+					    // pick a random mito with DNA
+					  case 1: 
+					    do{
+					      m1 = RND*NMITO;
+					    }while(!(M[m1].copies[DNA] != 0)); break;
+					    // pick a random mito without a DNA-complex
+					  case 2:
+					    do{
+					      m1 = RND*NMITO;
+					      completes++;
+					    }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
+					    // pick a random mito with DNA and without a DNA-complex
+					  case 3:
+					    do{
+					      m1 = RND*NMITO;
+					      completes++;
+					    }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
+					    // same mito gets all content
+					  case 4: break;
+					  }
+					if(completes < 10)
+					  Transfer(&N, &(M[m1]), r, k);
+				      }
+				    // fuse and exchange
+				    //printf("  fusion\n");
 
-				  for(i = 0; i < NFUSE; i++)
-				    {
-				      /// first choose the mitos
-				      if(SOCIAL == 1)
-					{
-					  // just choose random mitos
-					  do{ 
-					    m1 = RND*NMITO;
-					    m2 = RND*NMITO;
-					  }while(m1 == m2);
-					}
-				      else
-					{
-					  // choose random mitos bearing mtDNA
-					  do{
-					    m1 = RND*NMITO;
-					    m2 = RND*NMITO;
-					  }while(m1 == m2 || M[m1].copies[DNA] == 0 || M[m2].copies[DNA] == 0);
-					}
-				      //// then choose what to exchange
-				      //    Output(M[m1]);
-				      //Output(M[m2]);
-				      //printf("%i %i: %i %i\n", i, SWAP, m1, m2);
-				      // running out of mitos with DNA?
-				      Mix(&(M[m1]), &(M[m2]), SWAP);
-				      //		      Output(M[m1]);
-				      // Output(M[m2]);
+				    for(i = 0; i < NFUSE; i++)
+				      {
+					/// first choose the mitos
+					if(SOCIAL == 1)
+					  {
+					    // just choose random mitos
+					    do{ 
+					      m1 = RND*NMITO;
+					      m2 = RND*NMITO;
+					    }while(m1 == m2);
+					  }
+					else
+					  {
+					    // choose random mitos bearing mtDNA
+					    do{
+					      m1 = RND*NMITO;
+					      m2 = RND*NMITO;
+					    }while(m1 == m2 || M[m1].copies[DNA] == 0 || M[m2].copies[DNA] == 0);
+					  }
+					//// then choose what to exchange
+					//    Output(M[m1]);
+					//Output(M[m2]);
+					//printf("%i %i: %i %i\n", i, SWAP, m1, m2);
+					// running out of mitos with DNA?
+					Mix(&(M[m1]), &(M[m2]), SWAP);
+					//		      Output(M[m1]);
+					// Output(M[m2]);
 		
-				    }
-				  //printf("  decay\n");
-				  // decay old subunits
-				  Decay(&N, t);
-				  for(i = 0; i < NMITO; i++)
-				    Decay(&(M[i]), t);
+				      }
+				    //printf("  decay\n");
+				    // decay old subunits
+				    Decay(&N, t);
+				    for(i = 0; i < NMITO; i++)
+				      Decay(&(M[i]), t);
       
-				  // output state
-				  //Query(N);
-				  completes = completes2 = avprot = avdna = avprotempty = avprotfull = 0;
-				  for(i = 0; i < NMITO; i++)
-				    {
-				      //	  printf("  ");
-				      completes += Query(M[i], QUERY_NUCLEOPROTEIN);
-				      completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
-				      avprot += M[i].copies[0];
-				      avdna += M[i].copies[DNA];
-				      avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
-				      avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
-				    }
-				}
-			      fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f\n", TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO);
+				    // output state
+				    //Query(N);
+				    completes = completes2 = avprot = avdna = avprotempty = avprotfull = 0;
+				    for(i = 0; i < NMITO; i++)
+				      {
+					//	  printf("  ");
+					completes += Query(M[i], QUERY_NUCLEOPROTEIN);
+					completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
+					avprot += M[i].copies[0];
+					avdna += M[i].copies[DNA];
+					avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
+					avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
+				      }
+				  }
+				fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO);
 
-			    }
+			      }
+			  }
 			}
 		    }
+		  }
 		}
-	      }
 	    }
 	}
     }
