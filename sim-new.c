@@ -395,6 +395,7 @@ int main(void)
   int rep;
   int avprot, avdna, avprotempty, avprotfull, maxdna, onedna;
   char fstr[100];
+  int minEXPRESSION, maxEXPRESSION;
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -434,6 +435,16 @@ int main(void)
   fp = fopen(fstr, "w");
   fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna\n");
 
+  if(NSUBS == 5)
+    {
+      minEXPRESSION = 100;
+      maxEXPRESSION = 1000;
+    }
+  else
+    {
+      minEXPRESSION = 10;
+      maxEXPRESSION = 100;
+    }
   for(POISSON = 0; POISSON <= 1; POISSON++)
     {
       for(TARGET = 0; TARGET <= 4; TARGET++)
@@ -448,7 +459,7 @@ int main(void)
 		    LIFE = 30;
 		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 		    {
-		      for(EXPRESSION = 100; EXPRESSION <= 1000; EXPRESSION *= 10)
+		      for(EXPRESSION = minEXPRESSION; EXPRESSION <= maxEXPRESSION; EXPRESSION *= 10)
 			{
 			  IMPORT = EXPRESSION;
 			  //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
