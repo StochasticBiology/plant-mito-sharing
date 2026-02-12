@@ -36,6 +36,7 @@ int IMPORT;      // nucleus-mito import rate
 #define SWAP_SUBUNITS_DNA 2
 #define SWAP_NUCLEOPROTEIN 3
 #define SWAP_COMPLEXES 4
+#define SWAP_NUCLEOPROTEIN_COMPLEXES 5
 
 // social rules
 #define SOCIAL_MTDNA 0
@@ -141,25 +142,23 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
   dnain = C1->copies[DNA]+C2->copies[DNA];
   //Output(*C1);
   //Output(*C2);
-  // if we're mixing complexes or DNA complexes, first compute how many we have and partition them intact
-  if(mtype == SWAP_COMPLEXES || mtype == SWAP_NUCLEOPROTEIN)
+  // if we're  DNA complexes, first compute how many we have and partition them intact
+  if(mtype == SWAP_NUCLEOPROTEIN)
     {
-      q1 = Query(*C1, (mtype == SWAP_NUCLEOPROTEIN ? QUERY_NUCLEOPROTEIN : QUERY_COMPLEX));
-      q2 = Query(*C2, (mtype == SWAP_NUCLEOPROTEIN ? QUERY_NUCLEOPROTEIN : QUERY_COMPLEX));
+      q1 = Query(*C1, QUERY_NUCLEOPROTEIN);
+      q2 = Query(*C2, QUERY_NUCLEOPROTEIN);
 
-      //   printf("%i %i\n", q1, q2);
-      
-      // first partition complexes from C1
+            // first partition complexes from C1
       for(j = 0; j < q1; j++)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < (mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+	      for(i = 0; i < NCHEMS; i++)
 		Push(&t1, i, C1->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < (mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+	      for(i = 0; i < NCHEMS; i++)
 		Push(&t2, i, C1->birthdates[i][j]);
 	    }
 	}
@@ -168,17 +167,63 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < (mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+	      for(i = 0; i < NCHEMS; i++)
 		Push(&t1, i, C2->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < (mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+	      for(i = 0; i < NCHEMS; i++)
 		Push(&t2, i, C2->birthdates[i][j]);
 	    }
 	}
       // remove the elements correspond to those complexes we moved, so we can use the followup code to partition the leftovers
-      for(i = 0; i < (mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+      for(i = 0; i < NCHEMS; i++)
+	{
+	  for(j = 0; j < q1; j++)
+	    Pop(C1, i, 0);
+	  for(j = 0; j < q2; j++)
+	    Pop(C2, i, 0);
+	}
+
+    }
+  // if we're also partitioning complexes, do the same for those that remain
+  if(mtype == SWAP_COMPLEXES || mtype == SWAP_NUCLEOPROTEIN_COMPLEXES)
+    {
+      q1 = Query(*C1, QUERY_COMPLEX);
+      q2 = Query(*C2, QUERY_COMPLEX);
+
+      //   printf("%i %i\n", q1, q2);
+      
+      // first partition complexes from C1
+      for(j = 0; j < q1; j++)
+	{
+	  if(RND < 0.5)
+	    {
+	      for(i = 0; i < NSUBS; i++)
+		Push(&t1, i, C1->birthdates[i][j]);
+	    }
+	  else
+	    {
+	      for(i = 0; i < NSUBS; i++)
+		Push(&t2, i, C1->birthdates[i][j]);
+	    }
+	}
+      // then partition complexes from C2
+      for(j = 0; j < q2; j++)
+	{
+	  if(RND < 0.5)
+	    {
+	      for(i = 0; i < NSUBS; i++)
+		Push(&t1, i, C2->birthdates[i][j]);
+	    }
+	  else
+	    {
+	      for(i = 0; i < NSUBS; i++)
+		Push(&t2, i, C2->birthdates[i][j]);
+	    }
+	}
+      // remove the elements correspond to those complexes we moved, so we can use the followup code to partition the leftovers
+      for(i = 0; i < NSUBS; i++)
 	{
 	  for(j = 0; j < q1; j++)
 	    Pop(C1, i, 0);
@@ -195,7 +240,7 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
     }
 
   // go through biomolecules independently
-  for(i = 0; i < (mtype == SWAP_SUBUNITS_DNA || mtype == SWAP_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
+  for(i = 0; i < (mtype == SWAP_SUBUNITS_DNA || mtype == SWAP_NUCLEOPROTEIN || mtype == SWAP_NUCLEOPROTEIN_COMPLEXES ? NCHEMS : NSUBS); i++)
     {
       // for each one, choose which daughter mito to put it in
       for(j = 0; j < C1->copies[i]; j++)
@@ -301,12 +346,24 @@ void RunTest(void)
  
   
   printf("Testing mixing 1...\n");
-  for(i = 0; i <= 10; i++)
+  for(i = 0; i <= 5; i++)
     {
       Create(&C1, 0,0,0,0,0,1, 5);
       Create(&C2, 3,3,3,3,3,3, 7);
 
-      Mix(&C2, &C1, SWAP_NUCLEOPROTEIN);
+      Mix(&C2, &C1, i);
+      printf("-- %i\n", i);
+      Output(C1); Output(C2);
+      printf("\n");
+    }
+
+    printf("Testing mixing 1a...\n");
+  for(i = 0; i <= 5; i++)
+    {
+      Create(&C1, 5,5,5,5,5,1, 5);
+      Create(&C2, 0,0,0,0,0,0, 7);
+
+      Mix(&C2, &C1, i);
       printf("-- %i\n", i);
       Output(C1); Output(C2);
       printf("\n");
@@ -383,7 +440,7 @@ int main(void)
 	{
 	  for(SOCIAL = 0; SOCIAL <= 1; SOCIAL++)
 	    {
-	      for(SWAP = 0; SWAP <= 4; SWAP++)
+	      for(SWAP = 0; SWAP <= 5; SWAP++)
 		{
 		  NFUSE = NMITO/2;
 		  // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)

@@ -40,7 +40,7 @@ df = read.csv("sim-out-new-5.csv")
 # swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA
 
 target.labels = c("Random", "DNA-bearing", "No DNA-complex", "DNA-bearing,\nno DNA-complex", "Random by\nbatch")
-swap.labels = c("None", "Subunits", "DNA+Subunits", "DNA-Complexes", "Complexes")
+swap.labels = c("None", "Subunits", "DNA + Subunits", "DNA-Complexes", "Complexes", "DNA-complexes +\nComplexes")
 social.labels = c("DNA-bearing", "All mitos")
 df$target = target.labels[df$target+1]
 df$swap = swap.labels[df$swap+1]
