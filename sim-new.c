@@ -22,6 +22,7 @@ int IMPORT;      // nucleus-mito import rate
 #define QUERY_NUCLEOPROTEIN 1
 #define QUERY_MULTIPLE_DNA_COMPLEX 2
 #define QUERY_DNA 3
+#define QUERY_FREE_SUBUNITS 4
 
 // different rules for targetted protein import
 #define TARGET_RANDOM 0
@@ -72,14 +73,20 @@ int Query(Compartment C, int qtype)
 {
   int i;
   int min = MAXCHEMS;
-
+  int freesubs = 0;
+  
   if(qtype == QUERY_DNA) return C.copies[DNA];
   for(i = 0; i < (qtype == QUERY_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
     {
       if(C.copies[i] < min) min = C.copies[i];
     }
   if(qtype == QUERY_MULTIPLE_DNA_COMPLEX) return (min > 0 && C.copies[DNA] > 1 ? C.copies[DNA] : 0);
-  return min;
+  if(qtype == QUERY_NUCLEOPROTEIN || qtype == QUERY_COMPLEX) return min;
+  if(qtype == QUERY_FREE_SUBUNITS) {
+    for(i = 0; i < NSUBS; i++)
+      freesubs += C.copies[i]-min;
+  }
+  return freesubs;
 }
 
 void Output(Compartment C)
@@ -393,7 +400,7 @@ int main(void)
   FILE *fp;
   int TARGET, SWAP, SOCIAL, POISSON;
   int rep;
-  int avprot, avdna, avprotempty, avprotfull, maxdna, onedna;
+  int avprot, avdna, avprotempty, avprotfull, maxdna, onedna, freesubs;
   char fstr[100];
   int minEXPRESSION, maxEXPRESSION;
   
@@ -433,7 +440,7 @@ int main(void)
 
   sprintf(fstr, "sim-out-new-%i.csv", NSUBS);
   fp = fopen(fstr, "w");
-  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna\n");
+  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs\n");
 
   if(NSUBS == 5)
     {
@@ -566,8 +573,8 @@ int main(void)
 				    // output state
 				    //Query(N);
 				    if(t == 100 || t == 900 || t == 1000)
-				      {
-					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = onedna = 0;
+				      { 
+					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = onedna = freesubs = 0;
 					for(i = 0; i < NMITO; i++)
 					  {
 					    //	  printf("  ");
@@ -579,9 +586,10 @@ int main(void)
 					    avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
 					    onedna += (M[i].copies[DNA] == 1);
 					    if(M[i].copies[DNA] > maxdna) maxdna = M[i].copies[DNA];
+					    freesubs += Query(M[i], QUERY_FREE_SUBUNITS);
 					  }
 				    
-					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna, (float)onedna/NMITO);
+					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna, (float)onedna/NMITO, (float)freesubs/NMITO);
 				      }
 				  }
 			      }
