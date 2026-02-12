@@ -37,6 +37,10 @@ int IMPORT;      // nucleus-mito import rate
 #define SWAP_NUCLEOPROTEIN 3
 #define SWAP_COMPLEXES 4
 
+// social rules
+#define SOCIAL_MTDNA 0
+#define SOCIAL_ALL_MITOS 1
+
 // structure for enzyme and metabolite content of a compartment (cytosol or mito)
 typedef struct tagCompartment
 {
@@ -271,12 +275,16 @@ int Count(int n, double r)
 void Create(Compartment *C, int c1, int c2, int c3, int c4, int c5, int c6, int birthdate)
 {
   int i;
+  int j;
+
   C->copies[0] = c1; for(i = 0; i < c1; i++) C->birthdates[0][i] = birthdate;
   C->copies[1] = c2; for(i = 0; i < c2; i++) C->birthdates[1][i] = birthdate;
+  if(NSUBS == 5) {
   C->copies[2] = c3; for(i = 0; i < c3; i++) C->birthdates[2][i] = birthdate;
   C->copies[3] = c4; for(i = 0; i < c4; i++) C->birthdates[3][i] = birthdate;
   C->copies[4] = c5; for(i = 0; i < c5; i++) C->birthdates[4][i] = birthdate;
   C->copies[5] = c6; for(i = 0; i < c6; i++) C->birthdates[5][i] = birthdate;
+  }
 }
 
 void RunTest(void)
@@ -328,7 +336,8 @@ int main(void)
   FILE *fp;
   int TARGET, SWAP, SOCIAL, POISSON;
   int rep;
-  int avprot, avdna, avprotempty, avprotfull, maxdna;
+  int avprot, avdna, avprotempty, avprotfull, maxdna, onedna;
+  char fstr[100];
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -363,9 +372,10 @@ int main(void)
   // LIFE = 30h = 30 units
 
   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
-  
-  fp = fopen("sim-out-new.csv", "w");
-  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna\n");
+
+  sprintf(fstr, "sim-out-new-%i.csv", NSUBS);
+  fp = fopen(fstr, "w");
+  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna\n");
 
   for(POISSON = 0; POISSON <= 1; POISSON++)
     {
@@ -453,7 +463,7 @@ int main(void)
 				    for(i = 0; i < NFUSE; i++)
 				      {
 					/// first choose the mitos
-					if(SOCIAL == 1)
+					if(SOCIAL == SOCIAL_ALL_MITOS)
 					  {
 					    // just choose random mitos
 					    do{ 
@@ -489,7 +499,7 @@ int main(void)
 				    //Query(N);
 				    if(t == 100 || t == 900 || t == 1000)
 				      {
-					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = 0;
+					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = onedna = 0;
 					for(i = 0; i < NMITO; i++)
 					  {
 					    //	  printf("  ");
@@ -499,10 +509,11 @@ int main(void)
 					    avdna += M[i].copies[DNA];
 					    avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
 					    avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
+					    onedna += (M[i].copies[DNA] == 1);
 					    if(M[i].copies[DNA] > maxdna) maxdna = M[i].copies[DNA];
 					  }
 				    
-					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna);
+					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna, (float)onedna/NMITO);
 				      }
 				  }
 			      }

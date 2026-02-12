@@ -26,22 +26,22 @@ for(meanprot in 1:10) {
 df.res[df.res$meanprot==3 & df.res$meandna==0.5 & df.res$n == 5,]
 ggarrange(
   ggplot(df.res, aes(x=meanprot, y=meandna, fill=p)) + geom_tile() + 
-  scale_fill_viridis() + facet_wrap(~ paste("n =",n)) + 
-  labs(x = "Mean proteins per mito", y = "Mean DNA per mito", fill = "MtDNAs\nin\nDNA-\ncomplex"),
+    scale_fill_viridis() + facet_wrap(~ paste("n =",n)) + 
+    labs(x = "Mean proteins per mito", y = "Mean DNA per mito", fill = "MtDNAs\nin\nDNA-\ncomplex"),
   ggplot(df.res, aes(x=meanprot, y=meandna, fill=p1)) + geom_tile() + 
     scale_fill_viridis() + facet_wrap(~ paste("n =",n)) + 
     labs(x = "Mean proteins per mito", y = "Mean DNA per mito", fill = "MtDNAs\nwith\npartner\nand\ncomplex"),
   nrow=2
 )
 
-df = read.csv("sim-out-new.csv")
+df = read.csv("sim-out-new-5.csv")
 
 # target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
 # swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA
 
 target.labels = c("Random", "DNA-bearing", "No DNA-complex", "DNA-bearing,\nno DNA-complex", "Random by\nbatch")
 swap.labels = c("None", "Subunits", "DNA+Subunits", "DNA-Complexes", "Complexes")
-social.labels = c("All mitos", "DNA-bearing")
+social.labels = c("DNA-bearing", "All mitos")
 df$target = target.labels[df$target+1]
 df$swap = swap.labels[df$swap+1]
 df$social = social.labels[df$social+1]
@@ -54,6 +54,8 @@ hist(df$avprot[df$expression==1000])
 hist(df$avprot[df$expression==100])
 hist(df$avdna[df$expression==100])
 #df = df[df$expression == 100 & df$import == 100 & df$t == 100,]
+
+#### should demo that t=900 and t=1000 are comparbale
 
 df = df[df$poisson == 1 & df$t == 1000,]
 # next question -- without fusion, how does targetting influence completeness 
@@ -72,32 +74,32 @@ df_mean <- df[df$swap == "None" & df$social == "All mitos",] %>%
 
 if(FALSE) {
   df_sub <- df[df$swap == "None" & df$social == "All mitos",]
-ggplot(df_sub, aes(x = target, y = completes, fill=factor(t))) + 
-  geom_boxplot() + theme(axis.text.x = element_text(angle=90)) + 
-  facet_grid(poisson ~ expression)
-
-ggplot(df, aes(x = target, y = completes, group=factor(t),
-                    shape = factor(poisson), color=factor(meanprot))) + 
-  geom_box() + theme(axis.text.x = element_text(angle=90))
-
-ggplot(df_mean, aes(x = target, y = completes, 
-                   shape = factor(poisson), color=factor(meanprot))) + 
-  geom_point() + theme(axis.text.x = element_text(angle=90))
+  ggplot(df_sub, aes(x = target, y = completes, fill=factor(t))) + 
+    geom_boxplot() + theme(axis.text.x = element_text(angle=90)) + 
+    facet_grid(poisson ~ expression)
+  
+  ggplot(df, aes(x = target, y = completes, group=factor(t),
+                 shape = factor(poisson), color=factor(meanprot))) + 
+    geom_box() + theme(axis.text.x = element_text(angle=90))
+  
+  ggplot(df_mean, aes(x = target, y = completes, 
+                      shape = factor(poisson), color=factor(meanprot))) + 
+    geom_point() + theme(axis.text.x = element_text(angle=90))
 }
 
 df_sub <- df[df$swap == "None" & df$social == "All mitos",]
 ggarrange(
-ggplot(df_sub, aes(x = target, y = completes, color=factor(meanprot))) + geom_boxplot() +
-  geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-  labs(x = "Targetting rule (no exchange)", y = "MtDNAs in nucleoprotein", 
-       color = "Mean\nproteins\nper\nmito") +
-  ylim(0,100),
-ggplot(df_sub, aes(x = target, y = completes2, color=factor(meanprot))) + geom_boxplot() +
-  geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-  labs(x = "Targetting rule", y = "MtDNAs with partners and nucleoprotein", 
-       color = "Mean\nproteins\nper\nmito") + 
-  ylim(0,100),
-ncol = 2
+  ggplot(df_sub, aes(x = target, y = completes, color=factor(meanprot))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Targetting rule (no exchange)", y = "MtDNAs in nucleoprotein", 
+         color = "Mean\nproteins\nper\nmito") +
+    ylim(0,100),
+  ggplot(df_sub, aes(x = target, y = completes2, color=factor(meanprot))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Targetting rule", y = "MtDNAs with partners and nucleoprotein", 
+         color = "Mean\nproteins\nper\nmito") + 
+    ylim(0,100),
+  ncol = 2
 )
 
 ggplot(df_sub, aes(x = target, y = avprotempty, color=factor(meanprot))) + geom_boxplot() +
@@ -124,17 +126,36 @@ df_mean <- df[df$target == "Random" & df$nfuse == 100,] %>%
 
 df_sub <- df[df$target == "Random" & df$expression == 100,]
 ggarrange(
-ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + geom_boxplot() +
-  geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-  labs(x = "Exchange rule (random targetting)", y = "MtDNAs in nucleoprotein", 
-       color = "Mitos\nallowed\nto fuse") + ylim(0,100),
-ggplot(df_sub, aes(x = swap, y = completes2, color=factor(social))) + geom_boxplot() +
-  geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-  labs(x = "Exchange rule (random targetting)", y = "MtDNAs with partners and nucleoprotein", 
-       color = "Mitos\nallowed\nto fuse") + ylim(0,100),
-ncol=2
+  ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "MtDNAs in nucleoprotein", 
+         color = "Mitos\nallowed\nto fuse") + ylim(0,100),
+  ggplot(df_sub, aes(x = swap, y = completes2, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "MtDNAs with partners and nucleoprotein", 
+         color = "Mitos\nallowed\nto fuse") + ylim(0,100),
+  ncol=2
 )
 
+ggarrange(
+  ggplot(df_sub, aes(x = swap, y = avprotempty, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "Mean proteins in mtDNA-empty mitos", 
+         color = "Mitos\nallowed\nto fuse") ,
+  ggplot(df_sub, aes(x = swap, y = avprotfull, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "Mean proteins in mtDNA-bearing mitos", 
+         color = "Mitos\nallowed\nto fuse") ,
+  ggplot(df_sub, aes(x = swap, y = maxdna, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "Max DNAs in a mito", 
+         color = "Mitos\nallowed\nto fuse") ,
+  ggplot(df_sub, aes(x = swap, y = onedna, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "Proportion of mtDNAs alone in mito", 
+         color = "Mitos\nallowed\nto fuse") ,
+  ncol=2,nrow=2
+)
 
 # next question -- targetting vs swapping
 df_sub = df[df$expression == 100,]
@@ -148,18 +169,18 @@ df_mean <- df_sub %>%
     .groups = "drop"
   )
 ggarrange(
-ggplot(df_mean, aes(x=target, y=swap, fill=completes)) + 
-  geom_tile() + facet_wrap(~ "Fusion rule:"+social) + 
-  scale_fill_viridis() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  labs(x = "Targetting rule", y = "Exchange rule", fill = "MtDNAs\nwith\nnucleo-\nprotein"),
-
-ggplot(df_mean, aes(x=target, y=swap, fill=completes2)) + 
-  geom_tile() + facet_wrap(~ "Fusion rule:"+social) + 
-  scale_fill_viridis() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  labs(x = "Targetting rule", y = "Exchange rule", fill = "MtDNAs\nwith\npartner\nand\nnucleo-\nprotein"),
-nrow = 2)
+  ggplot(df_mean, aes(x=target, y=swap, fill=completes)) + 
+    geom_tile() + facet_wrap(~ "Fusion rule:"+social) + 
+    scale_fill_viridis() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    labs(x = "Targetting rule", y = "Exchange rule", fill = "MtDNAs\nwith\nnucleo-\nprotein"),
+  
+  ggplot(df_mean, aes(x=target, y=swap, fill=completes2)) + 
+    geom_tile() + facet_wrap(~ "Fusion rule:"+social) + 
+    scale_fill_viridis() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    labs(x = "Targetting rule", y = "Exchange rule", fill = "MtDNAs\nwith\npartner\nand\nnucleo-\nprotein"),
+  nrow = 2)
 
 my.aov = aov(completes ~ target *swap, data=df_sub)
 summary(my.aov)
@@ -172,3 +193,9 @@ summary(my.aov)
 interaction.plot(df_sub$target, df_sub$swap, df_sub$completes2)
 my.aov = aov(completes2 ~ target + swap, data=df_sub)
 TukeyHSD(my.aov)
+
+ggplot(df_mean, aes(x=completes, y=completes2, 
+                    shape=factor(target), color=factor(swap))) + 
+  geom_point() + facet_wrap(~ "Fusion rule:"+social) + 
+  labs(x = "MtDNAs in DNA-complex", y = "MtDNAs with partner and complex",
+       shape = "Targetting\nrule", color = "Exchange\nrule")
