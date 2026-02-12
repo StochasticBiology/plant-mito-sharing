@@ -442,7 +442,7 @@ int main(void)
     }
   else
     {
-      minEXPRESSION = 10;
+      minEXPRESSION = 25;
       maxEXPRESSION = 100;
     }
   for(POISSON = 0; POISSON <= 1; POISSON++)
@@ -459,7 +459,7 @@ int main(void)
 		    LIFE = 30;
 		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 		    {
-		      for(EXPRESSION = minEXPRESSION; EXPRESSION <= maxEXPRESSION; EXPRESSION *= 10)
+		      for(EXPRESSION = minEXPRESSION; EXPRESSION <= maxEXPRESSION; EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
 			{
 			  IMPORT = EXPRESSION;
 			  //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
