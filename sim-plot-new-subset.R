@@ -142,27 +142,28 @@ ggarrange(
 )
 
 ggarrange(
-  ggplot(df_sub, aes(x = swap, y = avprotempty, color=factor(social))) + geom_boxplot() +
-    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "Mean proteins in mtDNA-empty mitos", 
-         color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub, aes(x = swap, y = avprotfull, color=factor(social))) + geom_boxplot() +
-    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "Mean proteins in mtDNA-bearing mitos", 
-         color = "Mitos\nallowed\nto fuse") ,
   ggplot(df_sub, aes(x = swap, y = maxdna, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule (random targetting)", y = "Max DNAs in a mito", 
          color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub, aes(x = swap, y = onedna, color=factor(social))) + geom_boxplot() +
+  ggplot(df_sub, aes(x = swap, y = avprotempty, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "Proportion of mtDNAs alone in mito", 
+    labs(x = "Exchange rule (random targetting)", y = "Mean proteins in\nmtDNA-empty mitos", 
+         color = "Mitos\nallowed\nto fuse") ,
+  #ggplot(df_sub, aes(x = swap, y = avprotfull, color=factor(social))) + geom_boxplot() +
+  #  geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+  #  labs(x = "Exchange rule (random targetting)", y = "Mean proteins in\nmtDNA-bearing mitos", 
+  #       color = "Mitos\nallowed\nto fuse") ,
+   ggplot(df_sub, aes(x = swap, y = onedna, color=factor(social))) + geom_boxplot() +
+    geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
+    labs(x = "Exchange rule (random targetting)", y = "Proportion of mtDNAs\nalone in mito", 
          color = "Mitos\nallowed\nto fuse") ,
   ggplot(df_sub, aes(x = swap, y = freesubs, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "Mean free subunits per mito", 
+    labs(x = "Exchange rule (random targetting)", y = "Mean free subunits\nper mito", 
          color = "Mitos\nallowed\nto fuse") ,
-  ncol=3,nrow=2
+  ncol=2,nrow=2,
+  labels=c("A", "B", "C", "D")
 )
 
 ggarrange(
