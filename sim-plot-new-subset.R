@@ -34,7 +34,9 @@ ggarrange(
   nrow=2
 )
 
-df = read.csv("sim-out-new-5.csv")
+nsubs = 1
+
+df = read.csv(paste0("sim-out-new-", nsubs, ".csv", collapse=""))
 
 # target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
 # swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA
@@ -45,14 +47,13 @@ social.labels = c("DNA-bearing", "All mitos")
 df$target = target.labels[df$target+1]
 df$swap = swap.labels[df$swap+1]
 df$social = social.labels[df$social+1]
-mean.100 = mean(df$avprot[df$expression==100])
-mean.1000 = mean(df$avprot[df$expression==1000])
+mean.min = mean(df$avprot[df$expression==min(df$expression)])
+mean.max = mean(df$avprot[df$expression==max(df$expression)])
 df$meanprot = 0
-df$meanprot[df$expression==100] = round(mean.100, digits=0)
-df$meanprot[df$expression==1000] = round(mean.1000, digits=0)
-hist(df$avprot[df$expression==1000])
-hist(df$avprot[df$expression==100])
-hist(df$avdna[df$expression==100])
+df$meanprot[df$expression==min(df$expression)] = round(mean.min, digits=0)
+df$meanprot[df$expression==max(df$expression)] = round(mean.max, digits=0)
+hist(df$avprot[df$expression==min(df$expression)])
+hist(df$avprot[df$expression==max(df$expression)])
 #df = df[df$expression == 100 & df$import == 100 & df$t == 100,]
 
 #### should demo that t=900 and t=1000 are comparbale
@@ -124,7 +125,7 @@ df_mean <- df[df$target == "Random" & df$nfuse == 100,] %>%
     .groups = "drop"
   )
 
-df_sub <- df[df$target == "Random" & df$expression == 100,]
+df_sub <- df[df$target == "Random" & df$expression == min(df$expression),]
 ggarrange(
   ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
@@ -158,7 +159,7 @@ ggarrange(
 )
 
 # next question -- targetting vs swapping
-df_sub = df[df$expression == 100,]
+df_sub = df[df$expression == min(df$expression),]
 df_mean <- df_sub %>%
   group_by(across(-c(rep, completes, completes2, avprot, avdna))) %>%   # group by all other columns
   summarise(
