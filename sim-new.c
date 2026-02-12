@@ -340,7 +340,7 @@ void RunTest(void)
   printf("Testing transfer...\n");
   Create(&C1, 0,0,1,0,0,0, 5);
   Create(&C2, 3,3,3,3,3,3, 7);
-  Transfer(&C1, &C2, 2, 0);
+  Transfer(&C1, &C2, 0, 0);
   Output(C1); Output(C2);
   printf("\n");
  
