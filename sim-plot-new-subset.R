@@ -2,6 +2,9 @@ library(ggplot2)
 library(dplyr)
 library(ggbeeswarm)
 library(viridis)
+library(ggpubr)
+
+sf = 2
 
 pdf = data.frame(mean=rep(2:10, 10), size=rep(1:10, each=9))
 pdf$prob = (1-dpois(0, pdf$mean))**pdf$size
@@ -12,7 +15,7 @@ ggplot(pdf, aes(x=mean, y=size, fill=prob)) + geom_tile()
 df.res = data.frame()
 for(meanprot in 1:10) {
   for(meandna in (1:4)/4) {
-    for(n in c(1,5,10)) {
+    for(n in c(1,5,9)) {
       p = 0
       for(m in 1:10) {
         x = 1-sum(dpois(0:(m-1), meanprot))
@@ -24,18 +27,22 @@ for(meanprot in 1:10) {
   }
 }
 df.res[df.res$meanprot==3 & df.res$meandna==0.5 & df.res$n == 5,]
-ggarrange(
+fig.1 = ggarrange(
   ggplot(df.res, aes(x=meanprot, y=meandna, fill=p)) + geom_tile() + 
     scale_fill_viridis() + facet_wrap(~ paste("n =",n)) + 
-    labs(x = "Mean proteins per mito", y = "Mean DNA per mito", fill = "MtDNAs\nin\nDNA-\ncomplex"),
+    labs(x = "Mean copies per mito\nof each protein type", y = "Mean DNA per mito", fill = "MtDNAs\nin\nDNA-\ncomplex"),
   ggplot(df.res, aes(x=meanprot, y=meandna, fill=p1)) + geom_tile() + 
     scale_fill_viridis() + facet_wrap(~ paste("n =",n)) + 
-    labs(x = "Mean proteins per mito", y = "Mean DNA per mito", fill = "MtDNAs\nwith\npartner\nand\ncomplex"),
+    labs(x = "Mean copies per mito\nof each protein type", y = "Mean DNA per mito", fill = "MtDNAs\nwith\npartner\nand\ncomplex"),
   labels=c("A", "B"),
   nrow=2
 )
 
-nsubs = 5
+png("fig-1.png", width=600*sf, height=400*sf, res=72*sf)
+print(fig.1)
+dev.off()
+
+nsubs = 1
 
 df = read.csv(paste0("sim-out-new-", nsubs, ".csv", collapse=""))
 
@@ -90,15 +97,15 @@ if(FALSE) {
 }
 
 df_sub <- df[df$swap == "None" & df$social == "All mitos",]
-ggarrange(
+fig.2 = ggarrange(
   ggplot(df_sub, aes(x = target, y = completes, color=factor(meanprot))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Targetting rule (no exchange)", y = "MtDNAs in DNA-complex", 
+    labs(x = "Targetting rule\n(no exchange)", y = "MtDNAs in\nDNA-complex", 
          color = "Mean\nproteins\nper\nmito") +
     ylim(0,100),
   ggplot(df_sub, aes(x = target, y = completes2, color=factor(meanprot))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Targetting rule", y = "MtDNAs with partners and complex", 
+    labs(x = "Targetting rule\n(no exchange)", y = "MtDNAs with\npartners and\ncomplex", 
          color = "Mean\nproteins\nper\nmito") + 
     ylim(0,100),
   ncol = 2,
@@ -128,20 +135,21 @@ df_mean <- df[df$target == "Random" & df$nfuse == 100,] %>%
   )
 
 df_sub <- df[df$target == "Random" & df$expression == min(df$expression),]
-ggarrange(
+fig.3 = ggarrange(
   ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "MtDNAs in DNA-complex", 
+    labs(x = "Exchange rule\n(random targetting)", y = "MtDNAs in\nDNA-complex", 
          color = "Mitos\nallowed\nto fuse") + ylim(0,100),
   ggplot(df_sub, aes(x = swap, y = completes2, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
-    labs(x = "Exchange rule (random targetting)", y = "MtDNAs with partners and complex", 
+    labs(x = "Exchange rule\n(random targetting)", y = "MtDNAs with\npartners and\ncomplex", 
          color = "Mitos\nallowed\nto fuse") + ylim(0,100),
   ncol=2,
   labels=c("A", "B")
 )
 
-ggarrange(
+if(nsubs > 1) {
+fig.s1 = ggarrange(
   ggplot(df_sub, aes(x = swap, y = maxdna, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule (random targetting)", y = "Max DNAs in a mito", 
@@ -166,6 +174,7 @@ ggarrange(
   labels=c("A", "B", "C", "D")
 )
 
+
 ggarrange(
   ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + geom_boxplot() +
     geom_beeswarm(dodge.width=0.75) +   theme(axis.text.x = element_text(angle=90)) +
@@ -176,6 +185,7 @@ ggplot(df_sub, aes(x = swap, y = freesubs, color=factor(social))) + geom_boxplot
   labs(x = "Exchange rule (random targetting)", y = "Mean free subunits per mito", 
        color = "Mitos\nallowed\nto fuse")
 )
+}
 
 
 # next question -- targetting vs swapping
@@ -189,7 +199,7 @@ df_mean <- df_sub %>%
     avdna = mean(avdna, na.rm=TRUE),
     .groups = "drop"
   )
-ggarrange(
+fig.s2 = ggarrange(
   ggplot(df_mean, aes(x=target, y=swap, fill=completes)) + 
     geom_tile() + facet_wrap(~ "Fusion rule:"+social) + 
     scale_fill_viridis() +
@@ -215,8 +225,37 @@ interaction.plot(df_sub$target, df_sub$swap, df_sub$completes2)
 my.aov = aov(completes2 ~ target + swap, data=df_sub)
 TukeyHSD(my.aov)
 
-ggplot(df_mean, aes(x=completes, y=completes2, 
+fig.4 = ggplot(df_mean, aes(x=completes, y=completes2, 
                     shape=factor(target), color=factor(swap))) + 
   geom_point() + facet_wrap(~ "Fusion rule:"+social) + 
   labs(x = "MtDNAs in DNA-complex", y = "MtDNAs with partner and complex",
        shape = "Targetting\nrule", color = "Exchange\nrule")
+
+
+png(paste0("fig-2-", nsubs, ".png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
+print(fig.2)
+dev.off()
+png(paste0("fig-3-", nsubs, ".png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
+print(fig.3)
+dev.off()
+png(paste0("fig-4-", nsubs, ".png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
+print(fig.4)
+dev.off()
+png(paste0("fig-s1-", nsubs, ".png", collapse=""), width=600*sf, height=500*sf, res=72*sf)
+print(fig.s1)
+dev.off()
+png(paste0("fig-s2-", nsubs, ".png", collapse=""), width=600*sf, height=500*sf, res=72*sf)
+print(fig.s2)
+dev.off()
+png(paste0("fig-all-", nsubs, ".png", collapse=""), width=600*sf, height=750*sf, res=72*sf)
+print(ggarrange(fig.2 + theme(plot.margin = margin(20, 5, 5, 5)), 
+                fig.3 + theme(plot.margin = margin(20, 5, 5, 5)), 
+                fig.4 + theme(plot.margin = margin(20, 5, 5, 5)), 
+                labels=c("i", "ii", "iii"), 
+                label.x = 0.02,
+                label.y = 1.0,
+                hjust = 0,
+                vjust = 1,
+                nrow=3))
+dev.off()
+
