@@ -463,7 +463,7 @@ int main(void)
 		  NFUSE = NMITO/2;
 		  // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
 		  {
-		    LIFE = 30;
+		    LIFE = 24*14;
 		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 		    {
 		      for(EXPRESSION = minEXPRESSION; EXPRESSION <= maxEXPRESSION; EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
