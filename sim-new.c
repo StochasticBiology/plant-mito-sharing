@@ -444,8 +444,8 @@ int main(void)
 
   if(NSUBS == 5)
     {
-      minEXPRESSION = 100;
-      maxEXPRESSION = 1000;
+      minEXPRESSION = 15;
+      maxEXPRESSION = 50;
     }
   else
     {
