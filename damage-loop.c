@@ -6,16 +6,10 @@
 #define NMITO 200    // number of mitochondria
 #define MAXT 1000   // timescale
 #define NSAMP 100   // number of samples per expt
-#define NSUBS 5
-#define DNA NSUBS
-#define NCHEMS (NSUBS+1)
-#define MAXCHEMS 100
-#define NREP 10
-
-int NFUSE;       // number of fusion events per timestep
-int LIFE;        // subunit lifespan
-int EXPRESSION;  // expression rate
-int IMPORT;      // nucleus-mito import rate
+#define NPROTS 5
+#define MAXPROTS 100
+#define MAXDNA 200
+#define NREP 2
 
 // different output statistics for a mitochondrion
 #define QUERY_COMPLEX 0
@@ -23,6 +17,7 @@ int IMPORT;      // nucleus-mito import rate
 #define QUERY_MULTIPLE_DNA_COMPLEX 2
 #define QUERY_DNA 3
 #define QUERY_FREE_SUBUNITS 4
+#define QUERY_DAMAGE 5
 
 // different rules for targetted protein import
 #define TARGET_RANDOM 0
@@ -37,98 +32,247 @@ int IMPORT;      // nucleus-mito import rate
 #define SWAP_SUBUNITS_DNA 2
 #define SWAP_NUCLEOPROTEIN 3
 #define SWAP_COMPLEXES 4
-#define SWAP_NUCLEOPROTEIN_COMPLEXES 5
+#define SWAP_NUCLEOPROTEINS_AND_COMPLEXES 5
+
+// requirement types for molecules
+#define REQ_PROTEIN 0
+#define REQ_DNA 1
+
+// experiment types
+#define EXPT_NORMAL 0
+#define EXPT_TEMPLATE 1
+
+int EXPT = EXPT_NORMAL;
 
 // social rules
 #define SOCIAL_MTDNA 0
 #define SOCIAL_ALL_MITOS 1
 
-// structure for enzyme and metabolite content of a compartment (cytosol or mito)
-typedef struct tagCompartment
-{
-  int copies[NCHEMS];
-  int birthdates[NCHEMS][MAXCHEMS];
+// structure containing mitochondrial (or nuclear) protein and DNA content
+// with birthdates (for lifespan) and damage states respectively
+// 0 = no damage, nonzero = some step on the repair pathway
+typedef struct tagCompartment {
+  int proteins[NPROTS];
+  int birthdates[NPROTS][MAXPROTS];
+  int DNA;
+  int damage[MAXDNA];
 } Compartment;
 
-// dynamic parameters
-typedef struct tagParams
-{
-  double cytomito;        // cytosol-mito exchange
-  double bind, unbind;    // PQR complex binding/unbinding rates
-  double rate;            // metabolic reaction rate
-  int complexneeded;      // is PQR complex (as opposed to colocalised constituents) needed for reaction?
-  int enzymes;            // count of each enzyme across cell
-  double nfuse;              // number of fusion events per timestep
-} Params;
-
-void Empty(Compartment *C)
-{
-  int i;
-  for(i = 0; i < NCHEMS; i++)
-    C->copies[i] = 0;
-}
-
-// qtype == 0: number of complexes, == 1: number of DNA-complexes, == 2: number of DNAs if at least one complex
-int Query(Compartment C, int qtype)
-{
-  int i;
-  int min = MAXCHEMS;
-  int freesubs = 0;
-  
-  if(qtype == QUERY_DNA) return C.copies[DNA];
-  for(i = 0; i < (qtype == QUERY_NUCLEOPROTEIN ? NCHEMS : NSUBS); i++)
-    {
-      if(C.copies[i] < min) min = C.copies[i];
-    }
-  if(qtype == QUERY_MULTIPLE_DNA_COMPLEX) return (min > 0 && C.copies[DNA] > 1 ? C.copies[DNA] : 0);
-  if(qtype == QUERY_NUCLEOPROTEIN || qtype == QUERY_COMPLEX) return min;
-  if(qtype == QUERY_FREE_SUBUNITS) {
-    for(i = 0; i < NSUBS; i++)
-      freesubs += C.copies[i]-min;
-  }
-  return freesubs;
-}
-
-void Output(Compartment C)
-{
-  int i, j;
-
-  for(i = 0; i < NCHEMS; i++)
-    {
-      printf("%i (", C.copies[i]);
-      for(j = 0; j < C.copies[i]; j++) printf("%i ", C.birthdates[i][j]);
-      printf("), ");
-    }
-  printf("--> %i %i %i\n", Query(C, QUERY_COMPLEX), Query(C, QUERY_NUCLEOPROTEIN), Query(C, QUERY_MULTIPLE_DNA_COMPLEX));
-}
-
+// pop a protein from a compartment's set
 void Pop(Compartment *C, int chem, int ref)
 {
-  if(ref > C->copies[chem]) return;
+  if(ref > C->proteins[chem]) return;
   int i;
-  for(i = ref; i < C->copies[chem]-1; i++)
+  for(i = ref; i < C->proteins[chem]-1; i++)
     {
       C->birthdates[chem][i] = C->birthdates[chem][i+1];
     }
-  C->copies[chem] -= 1;
+  C->proteins[chem] -= 1;
 }
 
+// push a protein, with birthdate, into a compartment's set
 void Push(Compartment *C, int chem, int birthdate)
 {
-  if(C->copies[chem] > MAXCHEMS-1) return;
-  int i = C->copies[chem];
+  if(C->proteins[chem] > MAXPROTS-1) return;
+  int i = C->proteins[chem];
   C->birthdates[chem][i] = birthdate;
-  C->copies[chem] += 1;
+  C->proteins[chem] += 1;
 }
 
+// push DNA, with damage ref, into a compartment
+void PushDNA(Compartment *C, int damage)
+{
+  C->damage[C->DNA] = damage;
+  (C->DNA)++;
+}
+
+// pop DNA from a compartment
+void PopDNA(Compartment *C, int ref)
+{
+  if(ref > C->DNA) return;
+  int i;
+  for(i = ref; i < C->DNA-1; i++)
+    {
+      C->damage[i] = C->damage[i+1];
+    }
+  C->DNA -= 1;
+}
+
+// empty a compartment
+void Empty(Compartment *C)
+{
+  int i;
+  for(i = 0; i < NPROTS; i++)
+    C->proteins[i] = 0;
+  C->DNA = 0;
+}
+
+// how many, of which molecule type, are required for a repair step in this experiment
+int required(int moltype, int process)
+{
+  if(EXPT == EXPT_TEMPLATE) {
+    if(moltype == REQ_PROTEIN) return 2;
+    if(moltype == REQ_DNA) return 2;
+  }
+  if(moltype == REQ_PROTEIN) return 1;
+  if(moltype == REQ_DNA) return 0;
+  return 0;
+}
+
+// see if this compartment has a protein complement (and DNA?) that helps to fix DNA damage
+void Process(Compartment *C)
+{
+  int i, j;
+  
+  // loop through DNA in compartment
+  for(i = 0; i < C->DNA; i++)
+    {
+      // loop through steps in damage repair pathway
+      for(j = 0; j < NPROTS; j++)
+	{
+	  // if we are at this step and have sufficient proteins, repair
+	  if(C->damage[i] == j+1 && C->proteins[j] >= required(REQ_PROTEIN, j) && C->DNA >= required(REQ_DNA, j) )
+	    {
+	      C->damage[i]++;
+	    }
+	}
+      // if we've reached the end of the pathway, we are done
+      if(C->damage[i] == NPROTS+1) C->damage[i] = 0;
+    }
+}
+
+// cause damage to DNA with characteristic rate
+void DNADamage(Compartment *C, float MUT)
+{
+  int i;
+  
+  // randomly mutate DNA
+  for(i = 0; i < C->DNA; i++)
+    {
+      if(C->damage[i] == 0 && RND < MUT)
+	C->damage[i] = 1;
+    }
+}
+
+// move a protein from one compartment to another 
 void Transfer(Compartment *C1, Compartment *C2, int chem, int ref)
 {
-  if(ref >= C1->copies[chem]) return;
+  if(ref >= C1->proteins[chem]) return;
   int birthdate = C1->birthdates[chem][ref];
   Pop(C1, chem, ref);
   Push(C2, chem, birthdate);
 }
 
+// remove proteins over a given age
+void ProteinDecay(Compartment *C, int t, float LIFE)
+{
+  int i, j;
+  for(i = 0; i < NPROTS; i++)
+    {
+      for(j = 0; j < C->proteins[i]; j++)
+	{
+	  if(C->birthdates[i][j] < t - LIFE)
+	    {
+	      Pop(C, i, j);
+	      j--;
+	    }
+	}
+    }
+}
+
+// ask questions about a compartment's content
+/*#define QUERY_COMPLEX 0 - number of complexes
+  #define QUERY_NUCLEOPROTEIN 1 - number of nucleoprotein complexes
+  #define QUERY_MULTIPLE_DNA_COMPLEX 2 - number of DNAs with at least one other DNA and a complex
+  #define QUERY_DNA 3 - number of DNAs
+  #define QUERY_FREE_SUBUNITS 4 - number of proteins outside complexes
+  #define QUERY_DAMAGE 5 - amount of damage */
+int Query(Compartment C, int qtype)
+{
+  int count = 0;
+  int i;
+  int complexes;
+  
+  if(qtype == QUERY_DAMAGE)
+    {
+      for(i = 0; i < C.DNA; i++)
+	count += (C.damage[i] > 0);
+    }
+  if(qtype == QUERY_DNA)
+    {
+      count = C.DNA;
+    }
+  if(qtype == QUERY_COMPLEX)
+    {
+      count = MAXPROTS;
+      for(i = 0; i < NPROTS; i++)
+	{
+	  if(C.proteins[i] < count)
+	    count = C.proteins[i];
+	}
+    }
+  if(qtype == QUERY_FREE_SUBUNITS)
+    {
+      int complexes;
+      complexes = MAXPROTS;
+      for(i = 0; i < NPROTS; i++)
+	{
+	  if(C.proteins[i] < complexes)
+	    complexes = C.proteins[i];
+	}
+      for(i = 0; i < NPROTS; i++)
+	{
+	  count += C.proteins[i] - complexes;
+	}
+    }
+
+  if(qtype == QUERY_NUCLEOPROTEIN)
+    {
+      count = MAXPROTS;
+      for(i = 0; i < NPROTS; i++)
+	{
+	  if(C.proteins[i] < count)
+	    count = C.proteins[i];
+	}
+      if(C.DNA < count) count = C.DNA;
+    }
+  if(qtype == QUERY_MULTIPLE_DNA_COMPLEX)
+    {
+      count = MAXPROTS;
+      for(i = 0; i < NPROTS; i++)
+	{
+	  if(C.proteins[i] < count)
+	    count = C.proteins[i];
+	}
+      if(count > 0 && C.DNA >= 2) count = C.DNA;
+      else count = 0;
+    }
+
+  return count;
+}
+
+// output some properties of a compartment
+void Output(Compartment C, int showtimes)
+{
+  int i, j;
+
+  for(i = 0; i < NPROTS; i++)
+    {
+      printf("%i ", C.proteins[i]);
+      if(showtimes == 1)
+	{
+	  printf("(");
+      for(j = 0; j < C.proteins[i]; j++) printf("%i ", C.birthdates[i][j]);
+      printf("), ");
+	}
+    }
+  printf("+ %i: ", C.DNA);
+  for(j = 0; j < C.DNA; j++)
+    printf("%i, ", C.damage[j]);
+  printf("--> %i comp %i DNAcomp %i temps\n", Query(C, QUERY_COMPLEX), Query(C, QUERY_NUCLEOPROTEIN), Query(C, QUERY_MULTIPLE_DNA_COMPLEX));
+}
+
+// mix contents of two compartments according to a mix rule
 void Mix(Compartment *C1, Compartment *C2, int mtype)
 {
   // case 0: mix all subunits and DNA randomly
@@ -146,26 +290,27 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
   Empty(&t1);
   Empty(&t2);
 
-  dnain = C1->copies[DNA]+C2->copies[DNA];
-  //Output(*C1);
-  //Output(*C2);
+  dnain = C1->DNA+C2->DNA;
+  
   // if we're  DNA complexes, first compute how many we have and partition them intact
-  if(mtype == SWAP_NUCLEOPROTEIN)
+  if(mtype == SWAP_NUCLEOPROTEIN || mtype == SWAP_NUCLEOPROTEINS_AND_COMPLEXES)
     {
       q1 = Query(*C1, QUERY_NUCLEOPROTEIN);
       q2 = Query(*C2, QUERY_NUCLEOPROTEIN);
 
-            // first partition complexes from C1
+      // first partition complexes from C1
       for(j = 0; j < q1; j++)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < NCHEMS; i++)
+	      PushDNA(&t1, C1->damage[j]);
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t1, i, C1->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < NCHEMS; i++)
+	      PushDNA(&t2, C1->damage[j]);
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t2, i, C1->birthdates[i][j]);
 	    }
 	}
@@ -174,27 +319,39 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < NCHEMS; i++)
+	      PushDNA(&t1, C2->damage[j]);
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t1, i, C2->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < NCHEMS; i++)
+	      PushDNA(&t2, C2->damage[j]);
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t2, i, C2->birthdates[i][j]);
 	    }
 	}
       // remove the elements correspond to those complexes we moved, so we can use the followup code to partition the leftovers
-      for(i = 0; i < NCHEMS; i++)
+      for(j = 0; j < q1; j++)
 	{
-	  for(j = 0; j < q1; j++)
-	    Pop(C1, i, 0);
-	  for(j = 0; j < q2; j++)
-	    Pop(C2, i, 0);
-	}
 
+	  for(i = 0; i < NPROTS; i++)
+	    {
+	      Pop(C1, i, 0);
+	    }
+	  PopDNA(C1, 0);
+	}
+      for(j = 0; j < q2; j++)
+	{
+	  for(i = 0; i < NPROTS; i++)
+	    {
+	      Pop(C2, i, 0);
+	    }
+	  PopDNA(C2, 0);
+	}
     }
+
   // if we're also partitioning complexes, do the same for those that remain
-  if(mtype == SWAP_COMPLEXES || mtype == SWAP_NUCLEOPROTEIN_COMPLEXES)
+  if(mtype == SWAP_COMPLEXES || mtype == SWAP_NUCLEOPROTEINS_AND_COMPLEXES)
     {
       q1 = Query(*C1, QUERY_COMPLEX);
       q2 = Query(*C2, QUERY_COMPLEX);
@@ -206,12 +363,12 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < NSUBS; i++)
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t1, i, C1->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < NSUBS; i++)
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t2, i, C1->birthdates[i][j]);
 	    }
 	}
@@ -220,17 +377,17 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	{
 	  if(RND < 0.5)
 	    {
-	      for(i = 0; i < NSUBS; i++)
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t1, i, C2->birthdates[i][j]);
 	    }
 	  else
 	    {
-	      for(i = 0; i < NSUBS; i++)
+	      for(i = 0; i < NPROTS; i++)
 		Push(&t2, i, C2->birthdates[i][j]);
 	    }
 	}
       // remove the elements correspond to those complexes we moved, so we can use the followup code to partition the leftovers
-      for(i = 0; i < NSUBS; i++)
+      for(i = 0; i < NPROTS; i++)
 	{
 	  for(j = 0; j < q1; j++)
 	    Pop(C1, i, 0);
@@ -246,11 +403,11 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	      printf("end\n");*/
     }
 
-  // go through biomolecules independently
-  for(i = 0; i < (mtype == SWAP_SUBUNITS_DNA || mtype == SWAP_NUCLEOPROTEIN || mtype == SWAP_NUCLEOPROTEIN_COMPLEXES ? NCHEMS : NSUBS); i++)
+  // go through biomolecules independently -- first proteins
+  for(i = 0; i < NPROTS; i++) //(mtype == SWAP_SUBUNITS_DNA || mtype == SWAP_NUCLEOPROTEIN || mtype == SWAP_NUCLEOPROTEINS_AND_COMPLEXES ? NPROTS : NPROTS); i++)
     {
       // for each one, choose which daughter mito to put it in
-      for(j = 0; j < C1->copies[i]; j++)
+      for(j = 0; j < C1->proteins[i]; j++)
 	{
 	  if(RND < 0.5) Push(&t1, i, C1->birthdates[i][j]);
 	  else Push(&t2, i, C1->birthdates[i][j]);
@@ -258,8 +415,8 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	  // if(RND < 0.5) { printf("1 to 1\n"); Push(&t1, i, C1->birthdates[i][j]);}
 	  //else {printf("1 to 2\n"); Push(&t2, i, C1->birthdates[i][j]); }
 	}
-      // printf("- %i, %i in 1, %i in 2\n", j, t1.copies[NSUBS], t2.copies[NSUBS]);
-      for(j = 0; j < C2->copies[i]; j++)
+      // printf("- %i, %i in 1, %i in 2\n", j, t1.proteins[NPROTS], t2.proteins[NPROTS]);
+      for(j = 0; j < C2->proteins[i]; j++)
 	{
 	  if(RND < 0.5) Push(&t1, i, C2->birthdates[i][j]);
 	  else Push(&t2, i, C2->birthdates[i][j]);
@@ -267,25 +424,36 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
 	  // else {printf("2 to 2\n"); Push(&t2, i, C2->birthdates[i][j]); }
 
 	}
-      //      printf("- %i, %i in 1, %i in 2\n", j, t1.copies[NSUBS], t2.copies[NSUBS]);
+      //      printf("- %i, %i in 1, %i in 2\n", j, t1.proteins[NPROTS], t2.proteins[NPROTS]);
     }
-  // if we shared DNA, we've already done so. otherwise reconstruct the original DNA profiles
-  if(mtype == SWAP_SUBUNITS || mtype == SWAP_COMPLEXES)
+  // if we're sharing DNA, parititon what's left
+  if(!(mtype == SWAP_SUBUNITS || mtype == SWAP_COMPLEXES))
     {
-      i = DNA;
-      for(j = 0; j < C1->copies[i]; j++)
-	Push(&t1, i, C1->birthdates[i][j]);
-      for(j = 0; j < C2->copies[i]; j++)
-	Push(&t2, i, C2->birthdates[i][j]);
+      for(j = 0; j < C1->DNA; j++)
+	{
+	  if(RND < 0.5) PushDNA(&t1, C1->damage[j]);
+	  else PushDNA(&t2, C1->damage[j]);
+	}
+      for(j = 0; j < C2->DNA; j++)
+	{
+	  if(RND < 0.5) PushDNA(&t1, C2->damage[j]);
+	  else PushDNA(&t2, C2->damage[j]);
+	}
+    } else  // reconstruct original DNA profiles
+    {
+      for(j = 0; j < C1->DNA; j++)
+	PushDNA(&t1, C1->damage[j]);
+      for(j = 0; j < C2->DNA; j++)
+	PushDNA(&t2, C2->damage[j]);
     }
 
   *C1 = t1; *C2 = t2;
 
-  // printf("---, %i in 1, %i in 2\n", C1->copies[NSUBS], C1->copies[NSUBS]);
+  //printf("---, %i in 1, %i in 2\n", C1->DNA, C2->DNA);
 	       	       
-  //  Output(*C1);
+  //Output(*C1);
   //Output(*C2);
-  dnaout = C1->copies[DNA]+C2->copies[DNA];
+  dnaout = C1->DNA+C2->DNA;
   if(dnain != dnaout)
     {
       printf("Warning: changed DNA!\n");
@@ -293,35 +461,6 @@ void Mix(Compartment *C1, Compartment *C2, int mtype)
     }
 }
 
-void Decay(Compartment *C, int t)
-{
-  int i, j;
-  for(i = 0; i < NSUBS; i++)
-    {
-      for(j = 0; j < C->copies[i]; j++)
-	{
-	  if(C->birthdates[i][j] < t - LIFE)
-	    {
-	      Pop(C, i, j);
-	      j--;
-	    }
-	}
-    }
-}
-
-// binomial sampler with probability r
-int Count(int n, double r)
-{
-  int sign, count, i;
-  
-  sign = 1; count = 0;
-  if(n < 0) { sign = -1; n = -n; }
-  for(i = 0; i < n; i++)
-    {
-      if(RND < r) count++;
-    }
-  return count*sign;
-}
 
 // create a compartment from a definition -- just for testing
 void Create(Compartment *C, int c1, int c2, int c3, int c4, int c5, int c6, int birthdate)
@@ -329,65 +468,288 @@ void Create(Compartment *C, int c1, int c2, int c3, int c4, int c5, int c6, int 
   int i;
   int j;
 
-  C->copies[0] = c1; for(i = 0; i < c1; i++) C->birthdates[0][i] = birthdate;
-  C->copies[1] = c2; for(i = 0; i < c2; i++) C->birthdates[1][i] = birthdate;
-  if(NSUBS == 5) {
-  C->copies[2] = c3; for(i = 0; i < c3; i++) C->birthdates[2][i] = birthdate;
-  C->copies[3] = c4; for(i = 0; i < c4; i++) C->birthdates[3][i] = birthdate;
-  C->copies[4] = c5; for(i = 0; i < c5; i++) C->birthdates[4][i] = birthdate;
-  C->copies[5] = c6; for(i = 0; i < c6; i++) C->birthdates[5][i] = birthdate;
+  if(NPROTS == 1)
+    {
+      C->proteins[0] = c1; for(i = 0; i < c1; i++) C->birthdates[0][i] = birthdate;
+      C->DNA = c2; for(i = 0; i < c2; i++) C->damage[i] = birthdate;
+    }
+  if(NPROTS == 5) {
+    C->proteins[0] = c1; for(i = 0; i < c1; i++) C->birthdates[0][i] = birthdate;
+    C->proteins[1] = c2; for(i = 0; i < c2; i++) C->birthdates[1][i] = birthdate;
+    C->proteins[2] = c3; for(i = 0; i < c3; i++) C->birthdates[2][i] = birthdate;
+    C->proteins[3] = c4; for(i = 0; i < c4; i++) C->birthdates[3][i] = birthdate;
+    C->proteins[4] = c5; for(i = 0; i < c5; i++) C->birthdates[4][i] = birthdate;
+    C->DNA = c6; for(i = 0; i < c6; i++) C->damage[i] = birthdate;
+
   }
 }
 
+// test mixing process
 void RunTest(void)
 {
   Compartment C1, C2;
-  int i;
+  int i, j;
 
   printf("Testing transfer...\n");
   Create(&C1, 0,0,1,0,0,0, 5);
   Create(&C2, 3,3,3,3,3,3, 7);
-  Transfer(&C1, &C2, 0, 0);
-  Output(C1); Output(C2);
+  Transfer(&C2, &C1, 0, 0);
+  Output(C1, 0); Output(C2, 0);
   printf("\n");
  
   
-  printf("Testing mixing 1...\n");
-  for(i = 0; i <= 5; i++)
+  /* #define SWAP_NONE 0
+     #define SWAP_SUBUNITS 1
+     #define SWAP_SUBUNITS_DNA 2
+     #define SWAP_NUCLEOPROTEIN 3
+     #define SWAP_COMPLEXES 4
+     #define SWAP_NUCLEOPROTEINS_AND_COMPLEXES 5
+  */
+
+  for(j = 0; j <= 5; j++)
     {
-      Create(&C1, 0,0,0,0,0,1, 5);
-      Create(&C2, 3,3,3,3,3,3, 7);
 
-      Mix(&C2, &C1, i);
-      printf("-- %i\n", i);
-      Output(C1); Output(C2);
-      printf("\n");
+      printf("Testing mixing ");
+      switch(j) {
+      case 0: printf("none"); break;
+      case 1: printf("subs"); break;
+      case 2: printf("subs + DNA"); break;
+      case 3: printf("nucleoprot"); break;
+      case 4: printf("complexes"); break;
+      case 5: printf("nucleoprot + complexes"); break;
+      }
+      printf("...\n");
+      for(i = 0; i <= 3; i++)
+	{
+	  Create(&C1, 0,2,0,3,0,1, 5);
+	  Create(&C2, 3,3,4,3,3,4, 7);
+
+	  Mix(&C1, &C2, j);
+	  printf("-- %i\n", i);
+	  Output(C1, 0); Output(C2, 0);
+	  printf("\n");
+	}
     }
+  printf("Testing repair...\n");
+  Create(&C1, 2,2,0,3,0,1, 0);
+  Create(&C2, 3,3,4,3,3,1, 0);
+  DNADamage(&C1, 1);
+  DNADamage(&C2, 1);
+  Output(C1, 0); Output(C2, 0);
+  Process(&C1); Process(&C2);
+  Output(C1, 0); Output(C2, 0);
+}
 
-    printf("Testing mixing 1a...\n");
-  for(i = 0; i <= 5; i++)
+// parameters for experiments
+typedef struct tagParams {
+  int POISSON;
+  float MUT;
+  int TARGET;
+  int SOCIAL;
+  int SWAP;
+  int NFUSE;
+  float LIFE;
+  float EXPRESSION;
+  float IMPORT;
+} Params;
+
+// useful statistics of a compartment
+typedef struct tagOutput {
+  int completes, completes2;
+  float avprot, avdna, avprotempty, avprotfull;
+  int maxdna;
+  float onedna, freesubs;
+  int damage;
+} Outputs;
+
+// print out some useful statistics
+void OutputStats(Outputs O)
+{
+  printf("  %.3f average protein\n", O.avprot);
+  printf("  %i nucleoprot %i templaters\n", O.completes, O.completes2);
+  printf("  %i damage %.3f av DNA %.3f damage percent\n", O.damage, O.avdna, O.damage/(O.avdna*NMITO));
+}
+
+// get some useful statistics from a compartment
+void GetStats(Compartment *M, Outputs *O)
+{
+  int i;
+  O->completes = O->completes2 = O->avprot = O->avdna = O->avprotempty = O->avprotfull = O->maxdna = O->onedna = O->freesubs = O->damage = 0;
+	  for(i = 0; i < NMITO; i++)
+	    {
+	      O->completes += Query(M[i], QUERY_NUCLEOPROTEIN);
+	      O->completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
+	      O->avprot += M[i].proteins[0];
+	      O->avdna += Query(M[i], QUERY_DNA);
+	      O->onedna += (Query(M[i], QUERY_DNA) == 1);
+	      O->damage += Query(M[i], QUERY_DAMAGE);
+	      if(Query(M[i], QUERY_DNA) > O->maxdna) O->maxdna = Query(M[i], QUERY_DNA);
+	      O->freesubs += Query(M[i], QUERY_FREE_SUBUNITS);
+	    }
+
+	  O->avprot /= NMITO; O->avdna /= NMITO; O->avprotempty /= NMITO; O->avprotfull /= NMITO; O->onedna /= NMITO; O->freesubs /= NMITO;
+}
+
+// run a simulation of mitochondrial sharing
+void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
+{
+  Compartment N, *M;
+  int i;
+  int t;
+  int avprot, avdna, avprotempty, avprotfull, maxdna, onedna, freesubs, avdamage;
+  int r;
+  int m1, m2;
+  int k;
+  int completes, completes2;
+  Outputs O;
+  
+  M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
+  
+  // empty nucleus
+  for(i = 0; i < NMITO; i++)
+    Empty(&N);
+  // empty all mitos
+  for(i = 0; i < NMITO; i++)
+    Empty(&(M[i]));
+  // push mtDNA into some mitos
+  for(i = 0; i < NMITO/3; i++)
     {
-      Create(&C1, 5,5,5,5,5,1, 5);
-      Create(&C2, 0,0,0,0,0,0, 7);
-
-      Mix(&C2, &C1, i);
-      printf("-- %i\n", i);
-      Output(C1); Output(C2);
-      printf("\n");
+      r = RND*NMITO;
+      if(P.POISSON == 0)
+	PushDNA(&(M[i]), 0);
+      else
+	PushDNA(&(M[r]), 0);
     }
-
-  printf("Testing mixing 2...\n");
-  for(i = 0; i <= 3; i++)
+  for(t = 0; t <= MAXT; t++)
     {
-      Create(&C1, 0,2,0,3,0,1, 5);
-      Create(&C2, 3,3,4,3,3,4, 7);
+      // produce new subunits
+      for(i = 0; i < P.EXPRESSION; i++)
+	{
+	  r = RND*NPROTS;
+	  Push(&N, r, t);
+	}
+      //printf("  import\n");
+      // transfer random nuclear content to random mito
+      m1 = RND*NMITO;
+      for(i = 0; i < P.IMPORT; i++)
+	{
+	  r = RND*NPROTS;
+	  k = RND*N.proteins[r];
+	  completes = 0;
+	  switch(P.TARGET)
+	    {
+	      // just pick a random mito
+	    case 0: m1 = RND*NMITO; break;
+	      // pick a random mito with DNA
+	    case 1: 
+	      do{
+		m1 = RND*NMITO;
+	      }while(!(Query(M[m1], QUERY_DNA) != 0)); break;
+	      // pick a random mito without a DNA-complex
+	    case 2:
+	      do{
+		m1 = RND*NMITO;
+		completes++;
+	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
+	      // pick a random mito with DNA and without a DNA-complex
+	    case 3:
+	      do{
+		m1 = RND*NMITO;
+		completes++;
+	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
+	      // same mito gets all content
+	    case 4: break;
+	    }
+	  if(completes < 10)
+	    Transfer(&N, &(M[m1]), r, k);
+	}
+      // fuse and exchange
+      //printf("  fusion\n");
 
-      Mix(&C1, &C2, i);
-      printf("-- %i\n", i);
-      Output(C1); Output(C2);
-      printf("\n");
+      for(i = 0; i < P.NFUSE; i++)
+	{
+	  /// first choose the mitos
+	  if(P.SOCIAL == SOCIAL_ALL_MITOS)
+	    {
+	      // just choose random mitos
+	      do{ 
+		m1 = RND*NMITO;
+		m2 = RND*NMITO;
+	      }while(m1 == m2);
+	    }
+	  else
+	    {
+	      // choose random mitos bearing mtDNA
+	      completes = 0;
+	      do{
+		m1 = RND*NMITO;
+		m2 = RND*NMITO;
+		completes++;
+	      }while(m1 == m2 || Query(M[m1], QUERY_DNA) == 0 || Query(M[m2], QUERY_DNA) == 0 && completes < 10);
+	    }
+	  //// then choose what to exchange
+	  //    Output(M[m1]);
+	  //Output(M[m2]);
+	  //printf("%i %i: %i %i\n", i, SWAP, m1, m2);
+	  // running out of mitos with DNA?
+	  if(completes != 10)
+	    Mix(&(M[m1]), &(M[m2]), P.SWAP);
+	  //		      Output(M[m1]);
+	  // Output(M[m2]);
+		
+	}
+      //printf("  decay\n");
+      // decay old subunits
+      ProteinDecay(&N, t, P.LIFE);
+      for(i = 0; i < NMITO; i++) {
+	ProteinDecay(&(M[i]), t, P.LIFE);
+	DNADamage(&(M[i]), P.MUT);
+	Process(&(M[i]));
+      }
+				    
+      // output state
+      //Query(N);
+      if(t == 100 || t == 900 || t == 1000)
+	{ 
+	  GetStats(M, &O);
+	  if(fp != NULL) {
+	  fprintf(fp, "%.3e,%i,%i,%i,%i,%.3e,", P.MUT, P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE);
+	  fprintf(fp, "%.3e,%.3e,%i,%i,", P.EXPRESSION, P.IMPORT, rep, t);
+	  fprintf(fp, "%i,%i,%.3e,%.3e,%.3e,%.3e,",O.completes, O.completes2, O.avprot, O.avdna, O.avprotempty, O.avprotfull);
+		  fprintf(fp, "%i,%.3e,%.3e,%i\n", O.maxdna, O.onedna, O.freesubs, O.damage);
+	  }
+	}
     }
+  for(i = 0; i < NMITO; i++)
+    Mret[i] = M[i];
 
+  *Oret = O;
+  
+  free(M);
+}
+
+// routine for testing behaviour under dynamic simulation
+void RunSimTest(void)
+{
+  Compartment *M;
+  FILE *fp;
+  int i;
+  Params P;
+  Outputs O;
+  
+  printf("Testing simulation...\n");
+
+   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
+    fp = NULL;
+
+    P.POISSON = 1; P.MUT = 0.1; P.TARGET = 0; P.SOCIAL = 0; P.SWAP = 0; P.LIFE = 24*7; P.EXPRESSION = 15; P.IMPORT = 15;
+    P.NFUSE = NMITO/2;
+    Simulate(P, fp, 0, M, &O);
+  for(i = 0; i < NMITO; i++)
+    Output(M[i], 0);
+  OutputStats(O);
+  free(M);
+  
 }
 
 int main(void)
@@ -395,14 +757,12 @@ int main(void)
   Compartment N, *M;
   int i;
   int t;
-  int r, k, m1, m2;
-  int completes, completes2;
   FILE *fp;
-  int TARGET, SWAP, SOCIAL, POISSON;
   int rep;
-  int avprot, avdna, avprotempty, avprotfull, maxdna, onedna, freesubs;
   char fstr[100];
   int minEXPRESSION, maxEXPRESSION;
+  Params P;
+  Outputs O;
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -423,6 +783,12 @@ int main(void)
   RunTest();
   //return 0;
 
+    M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
+
+    RunSimTest();
+    
+    //return 0;
+  
   // say we have 10min as a time unit
   // NFUSE fusions -> each mito undergoes 2*NFUSE/NMITO fusions per unit time, so connected in NMITO/(2*NFUSE) timesteps
   // -> require NMITO/(2*NFUSE) = 1 hour -> NFUSE = NMITO/2 / 1hr -> NFUSE = NMITO/2 / 6units = NMITO / 12
@@ -436,13 +802,11 @@ int main(void)
   // i.e. each mito has 1 fusion events per 1hr unit
   // LIFE = 30h = 30 units
 
-  M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
-
-  sprintf(fstr, "sim-out-new-%i.csv", NSUBS);
+  sprintf(fstr, "sim-damage-%i.csv", NPROTS);
   fp = fopen(fstr, "w");
-  fprintf(fp, "poisson,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs\n");
+  fprintf(fp, "mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
 
-  if(NSUBS == 5)
+  if(NPROTS == 5)
     {
       minEXPRESSION = 15;
       maxEXPRESSION = 50;
@@ -452,152 +816,36 @@ int main(void)
       minEXPRESSION = 25;
       maxEXPRESSION = 100;
     }
-  for(POISSON = 0; POISSON <= 1; POISSON++)
+  P.POISSON = 1;
+  for(P.MUT = 0; P.MUT <= 0.011; P.MUT += 0.005)
     {
-      for(TARGET = 0; TARGET <= 4; TARGET++)
+      for(P.TARGET = 0; P.TARGET <= 4; P.TARGET++)
 	{
-	  for(SOCIAL = 0; SOCIAL <= 1; SOCIAL++)
+	  for(P.SOCIAL = 0; P.SOCIAL <= 1; P.SOCIAL++)
 	    {
-	      for(SWAP = 0; SWAP <= 5; SWAP++)
+	      for(P.SWAP = 0; P.SWAP <= 5; P.SWAP++)
 		{
-		  NFUSE = NMITO/2;
+		  P.NFUSE = NMITO/2;
 		  // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
 		  {
-		    LIFE = 24*14;
+		    P.LIFE = 24*7;
 		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 		    {
-		      for(EXPRESSION = minEXPRESSION; EXPRESSION <= maxEXPRESSION; EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
+		      for(P.EXPRESSION = minEXPRESSION; P.EXPRESSION <= maxEXPRESSION; P.EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
 			{
-			  IMPORT = EXPRESSION;
+			  P.IMPORT = P.EXPRESSION;
 			  //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
 			  {
-			    printf("%i,%i,%i,%i,%i,%i,%i\n", TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT);
+			    printf("%i,%i,%i,%i,%.3e,%.3e,%.3e\n", P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE, P.EXPRESSION, P.IMPORT);
 			    for(rep = 0; rep < NREP; rep++)
 			      {
-				// empty nucleus
-				for(i = 0; i < NMITO; i++)
-				  Empty(&N);
-				// empty all mitos
-				for(i = 0; i < NMITO; i++)
-				  Empty(&(M[i]));
-				// push mtDNA into some mitos
-				for(i = 0; i < NMITO/2; i++)
-				  {
-				    r = RND*NMITO;
-				    if(POISSON == 0)
-				      Push(&(M[i]), DNA, 0);
-				    else
-				      Push(&(M[r]), DNA, 0);
-				  }
-				for(t = 0; t <= MAXT; t++)
-				  {
-				    // produce new subunits
-				    for(i = 0; i < EXPRESSION; i++)
-				      {
-					r = RND*NSUBS;
-					Push(&N, r, t);
-				      }
-				    //printf("  import\n");
-				    // transfer random nuclear content to random mito
-				    m1 = RND*NMITO;
-				    for(i = 0; i < IMPORT; i++)
-				      {
-					r = RND*NSUBS;
-					k = RND*N.copies[r];
-					completes = 0;
-					switch(TARGET)
-					  {
-					    // just pick a random mito
-					  case 0: m1 = RND*NMITO; break;
-					    // pick a random mito with DNA
-					  case 1: 
-					    do{
-					      m1 = RND*NMITO;
-					    }while(!(M[m1].copies[DNA] != 0)); break;
-					    // pick a random mito without a DNA-complex
-					  case 2:
-					    do{
-					      m1 = RND*NMITO;
-					      completes++;
-					    }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
-					    // pick a random mito with DNA and without a DNA-complex
-					  case 3:
-					    do{
-					      m1 = RND*NMITO;
-					      completes++;
-					    }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
-					    // same mito gets all content
-					  case 4: break;
-					  }
-					if(completes < 10)
-					  Transfer(&N, &(M[m1]), r, k);
-				      }
-				    // fuse and exchange
-				    //printf("  fusion\n");
-
-				    for(i = 0; i < NFUSE; i++)
-				      {
-					/// first choose the mitos
-					if(SOCIAL == SOCIAL_ALL_MITOS)
-					  {
-					    // just choose random mitos
-					    do{ 
-					      m1 = RND*NMITO;
-					      m2 = RND*NMITO;
-					    }while(m1 == m2);
-					  }
-					else
-					  {
-					    // choose random mitos bearing mtDNA
-					    do{
-					      m1 = RND*NMITO;
-					      m2 = RND*NMITO;
-					    }while(m1 == m2 || M[m1].copies[DNA] == 0 || M[m2].copies[DNA] == 0);
-					  }
-					//// then choose what to exchange
-					//    Output(M[m1]);
-					//Output(M[m2]);
-					//printf("%i %i: %i %i\n", i, SWAP, m1, m2);
-					// running out of mitos with DNA?
-					Mix(&(M[m1]), &(M[m2]), SWAP);
-					//		      Output(M[m1]);
-					// Output(M[m2]);
-		
-				      }
-				    //printf("  decay\n");
-				    // decay old subunits
-				    Decay(&N, t);
-				    for(i = 0; i < NMITO; i++)
-				      Decay(&(M[i]), t);
-      
-				    // output state
-				    //Query(N);
-				    if(t == 100 || t == 900 || t == 1000)
-				      { 
-					completes = completes2 = avprot = avdna = avprotempty = avprotfull = maxdna = onedna = freesubs = 0;
-					for(i = 0; i < NMITO; i++)
-					  {
-					    //	  printf("  ");
-					    completes += Query(M[i], QUERY_NUCLEOPROTEIN);
-					    completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
-					    avprot += M[i].copies[0];
-					    avdna += M[i].copies[DNA];
-					    avprotempty += (M[i].copies[DNA] == 0 ? M[i].copies[0] : 0);
-					    avprotfull  += (M[i].copies[DNA] != 0 ? M[i].copies[0] : 0);
-					    onedna += (M[i].copies[DNA] == 1);
-					    if(M[i].copies[DNA] > maxdna) maxdna = M[i].copies[DNA];
-					    freesubs += Query(M[i], QUERY_FREE_SUBUNITS);
-					  }
-				    
-					fprintf(fp, "%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.3f,%.3f,%.3f,%.3f,%i,%.3f,%.3f\n", POISSON, TARGET, SWAP, SOCIAL, NFUSE, LIFE, EXPRESSION, IMPORT, rep, t, completes, completes2, (float)avprot/NMITO, (float)avdna/NMITO, (float)avprotempty/NMITO, (float)avprotfull/NMITO, maxdna, (float)onedna/NMITO, (float)freesubs/NMITO);
-				      }
-				  }
+				Simulate(P, fp, rep, M, &O); 
 			      }
-			   }
-			}
-		     } 
+			  }
+			} 
+		    }
 		  }
-	       }
+		}
 	    }
 	}
     }
@@ -606,3 +854,4 @@ int main(void)
   
   return 0;
 }
+
