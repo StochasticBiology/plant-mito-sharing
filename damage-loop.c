@@ -3,18 +3,18 @@
 
 #define RND drand48()
 
-#define NMITO 200    // number of mitochondria
+#define NMITO 300    // number of mitochondria
 #define MAXT 1000   // timescale
 #define NSAMP 100   // number of samples per expt
 #define NPROTS 5
 #define MAXPROTS 100
 #define MAXDNA 200
-#define NREP 2
+#define NREP 10
 
 // different output statistics for a mitochondrion
 #define QUERY_COMPLEX 0
 #define QUERY_NUCLEOPROTEIN 1
-#define QUERY_MULTIPLE_DNA_COMPLEX 2
+#define QUERY_TEMPLATE_CAPACITY 2
 #define QUERY_DNA 3
 #define QUERY_FREE_SUBUNITS 4
 #define QUERY_DAMAGE 5
@@ -25,6 +25,7 @@
 #define TARGET_NO_NUCLEOPROTEIN 2
 #define TARGET_DNA_NO_COMPLEX 3
 #define TARGET_RANDOM_BATCH 4
+#define TARGET_DAMAGE 5
 
 // different rules for sharing content upon fusion
 #define SWAP_NONE 0
@@ -42,7 +43,7 @@
 #define EXPT_NORMAL 0
 #define EXPT_TEMPLATE 1
 
-int EXPT = EXPT_NORMAL;
+int EXPT = (NPROTS == 5 ? EXPT_NORMAL : EXPT_TEMPLATE);
 
 // social rules
 #define SOCIAL_MTDNA 0
@@ -57,6 +58,30 @@ typedef struct tagCompartment {
   int DNA;
   int damage[MAXDNA];
 } Compartment;
+
+// parameters for experiments
+typedef struct tagParams {
+  int POISSON;
+  float MUT;
+  int TARGET;
+  int SOCIAL;
+  int SWAP;
+  int NFUSE;
+  float LIFE;
+  float EXPRESSION;
+  float IMPORT;
+  float SCANRATE;
+} Params;
+
+// useful statistics of a compartment
+typedef struct tagOutput {
+  int completes, completes2;
+  float avprot, avdna, avprotempty, avprotfull;
+  int maxdna;
+  float onedna, freesubs;
+  int damage;
+} Outputs;
+
 
 // pop a protein from a compartment's set
 void Pop(Compartment *C, int chem, int ref)
@@ -120,9 +145,9 @@ int required(int moltype, int process)
 }
 
 // see if this compartment has a protein complement (and DNA?) that helps to fix DNA damage
-void Process(Compartment *C)
+void Process(Compartment *C, Params P)
 {
-  int i, j;
+  int i, j, k;
   
   // loop through DNA in compartment
   for(i = 0; i < C->DNA; i++)
@@ -133,7 +158,17 @@ void Process(Compartment *C)
 	  // if we are at this step and have sufficient proteins, repair
 	  if(C->damage[i] == j+1 && C->proteins[j] >= required(REQ_PROTEIN, j) && C->DNA >= required(REQ_DNA, j) )
 	    {
-	      C->damage[i]++;
+	      // if this is the first damage step, give every protein a chance at finding the damage and making the first step
+	      if(j+1 == 1) {
+		for(k = 0; k < C->proteins[j]; k++)
+		  {
+		    if(RND < P.SCANRATE)
+		      C->damage[i] = j+1 + 1;
+		  }
+	      } else {
+		// otherwise just keep fixing if the protein is there
+	        C->damage[i]++;
+	      }
 	    }
 	}
       // if we've reached the end of the pathway, we are done
@@ -142,14 +177,14 @@ void Process(Compartment *C)
 }
 
 // cause damage to DNA with characteristic rate
-void DNADamage(Compartment *C, float MUT)
+void DNADamage(Compartment *C, Params P)
 {
   int i;
   
   // randomly mutate DNA
   for(i = 0; i < C->DNA; i++)
     {
-      if(C->damage[i] == 0 && RND < MUT)
+      if(C->damage[i] == 0 && RND < P.MUT)
 	C->damage[i] = 1;
     }
 }
@@ -164,14 +199,14 @@ void Transfer(Compartment *C1, Compartment *C2, int chem, int ref)
 }
 
 // remove proteins over a given age
-void ProteinDecay(Compartment *C, int t, float LIFE)
+void ProteinDecay(Compartment *C, int t, Params P)
 {
   int i, j;
   for(i = 0; i < NPROTS; i++)
     {
       for(j = 0; j < C->proteins[i]; j++)
 	{
-	  if(C->birthdates[i][j] < t - LIFE)
+	  if(C->birthdates[i][j] < t - P.LIFE)
 	    {
 	      Pop(C, i, j);
 	      j--;
@@ -183,7 +218,7 @@ void ProteinDecay(Compartment *C, int t, float LIFE)
 // ask questions about a compartment's content
 /*#define QUERY_COMPLEX 0 - number of complexes
   #define QUERY_NUCLEOPROTEIN 1 - number of nucleoprotein complexes
-  #define QUERY_MULTIPLE_DNA_COMPLEX 2 - number of DNAs with at least one other DNA and a complex
+  #define QUERY_TEMPLATE_CAPACITY 2 - number of DNAs with at least one other DNA and a complex
   #define QUERY_DNA 3 - number of DNAs
   #define QUERY_FREE_SUBUNITS 4 - number of proteins outside complexes
   #define QUERY_DAMAGE 5 - amount of damage */
@@ -236,7 +271,7 @@ int Query(Compartment C, int qtype)
 	}
       if(C.DNA < count) count = C.DNA;
     }
-  if(qtype == QUERY_MULTIPLE_DNA_COMPLEX)
+  if(qtype == QUERY_TEMPLATE_CAPACITY)
     {
       count = MAXPROTS;
       for(i = 0; i < NPROTS; i++)
@@ -244,7 +279,7 @@ int Query(Compartment C, int qtype)
 	  if(C.proteins[i] < count)
 	    count = C.proteins[i];
 	}
-      if(count > 0 && C.DNA >= 2) count = C.DNA;
+      if(count >= 2 && C.DNA >= 2) count = C.DNA;
       else count = 0;
     }
 
@@ -262,14 +297,14 @@ void Output(Compartment C, int showtimes)
       if(showtimes == 1)
 	{
 	  printf("(");
-      for(j = 0; j < C.proteins[i]; j++) printf("%i ", C.birthdates[i][j]);
-      printf("), ");
+	  for(j = 0; j < C.proteins[i]; j++) printf("%i ", C.birthdates[i][j]);
+	  printf("), ");
 	}
     }
   printf("+ %i: ", C.DNA);
   for(j = 0; j < C.DNA; j++)
     printf("%i, ", C.damage[j]);
-  printf("--> %i comp %i DNAcomp %i temps\n", Query(C, QUERY_COMPLEX), Query(C, QUERY_NUCLEOPROTEIN), Query(C, QUERY_MULTIPLE_DNA_COMPLEX));
+  printf("--> %i comp %i DNAcomp %i temps\n", Query(C, QUERY_COMPLEX), Query(C, QUERY_NUCLEOPROTEIN), Query(C, QUERY_TEMPLATE_CAPACITY));
 }
 
 // mix contents of two compartments according to a mix rule
@@ -489,7 +524,11 @@ void RunTest(void)
 {
   Compartment C1, C2;
   int i, j;
+  Params P;
 
+  P.SCANRATE = 1;
+  P.MUT = 1;
+  
   printf("Testing transfer...\n");
   Create(&C1, 0,0,1,0,0,0, 5);
   Create(&C2, 3,3,3,3,3,3, 7);
@@ -533,34 +572,12 @@ void RunTest(void)
   printf("Testing repair...\n");
   Create(&C1, 2,2,0,3,0,1, 0);
   Create(&C2, 3,3,4,3,3,1, 0);
-  DNADamage(&C1, 1);
-  DNADamage(&C2, 1);
+  DNADamage(&C1, P);
+  DNADamage(&C2, P);
   Output(C1, 0); Output(C2, 0);
-  Process(&C1); Process(&C2);
+  Process(&C1, P); Process(&C2, P);
   Output(C1, 0); Output(C2, 0);
 }
-
-// parameters for experiments
-typedef struct tagParams {
-  int POISSON;
-  float MUT;
-  int TARGET;
-  int SOCIAL;
-  int SWAP;
-  int NFUSE;
-  float LIFE;
-  float EXPRESSION;
-  float IMPORT;
-} Params;
-
-// useful statistics of a compartment
-typedef struct tagOutput {
-  int completes, completes2;
-  float avprot, avdna, avprotempty, avprotfull;
-  int maxdna;
-  float onedna, freesubs;
-  int damage;
-} Outputs;
 
 // print out some useful statistics
 void OutputStats(Outputs O)
@@ -575,19 +592,19 @@ void GetStats(Compartment *M, Outputs *O)
 {
   int i;
   O->completes = O->completes2 = O->avprot = O->avdna = O->avprotempty = O->avprotfull = O->maxdna = O->onedna = O->freesubs = O->damage = 0;
-	  for(i = 0; i < NMITO; i++)
-	    {
-	      O->completes += Query(M[i], QUERY_NUCLEOPROTEIN);
-	      O->completes2 += Query(M[i], QUERY_MULTIPLE_DNA_COMPLEX);
-	      O->avprot += M[i].proteins[0];
-	      O->avdna += Query(M[i], QUERY_DNA);
-	      O->onedna += (Query(M[i], QUERY_DNA) == 1);
-	      O->damage += Query(M[i], QUERY_DAMAGE);
-	      if(Query(M[i], QUERY_DNA) > O->maxdna) O->maxdna = Query(M[i], QUERY_DNA);
-	      O->freesubs += Query(M[i], QUERY_FREE_SUBUNITS);
-	    }
+  for(i = 0; i < NMITO; i++)
+    {
+      O->completes += Query(M[i], QUERY_NUCLEOPROTEIN);
+      O->completes2 += Query(M[i], QUERY_TEMPLATE_CAPACITY);
+      O->avprot += M[i].proteins[0];
+      O->avdna += Query(M[i], QUERY_DNA);
+      O->onedna += (Query(M[i], QUERY_DNA) == 1);
+      O->damage += Query(M[i], QUERY_DAMAGE);
+      if(Query(M[i], QUERY_DNA) > O->maxdna) O->maxdna = Query(M[i], QUERY_DNA);
+      O->freesubs += Query(M[i], QUERY_FREE_SUBUNITS);
+    }
 
-	  O->avprot /= NMITO; O->avdna /= NMITO; O->avprotempty /= NMITO; O->avprotfull /= NMITO; O->onedna /= NMITO; O->freesubs /= NMITO;
+  O->avprot /= NMITO; O->avdna /= NMITO; O->avprotempty /= NMITO; O->avprotfull /= NMITO; O->onedna /= NMITO; O->freesubs /= NMITO;
 }
 
 // run a simulation of mitochondrial sharing
@@ -639,29 +656,35 @@ void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
 	  switch(P.TARGET)
 	    {
 	      // just pick a random mito
-	    case 0: m1 = RND*NMITO; break;
+	    case TARGET_RANDOM: m1 = RND*NMITO; break;
 	      // pick a random mito with DNA
-	    case 1: 
+	    case TARGET_DNA_BEARING: 
 	      do{
 		m1 = RND*NMITO;
 	      }while(!(Query(M[m1], QUERY_DNA) != 0)); break;
 	      // pick a random mito without a DNA-complex
-	    case 2:
+	    case TARGET_NO_NUCLEOPROTEIN:
 	      do{
 		m1 = RND*NMITO;
 		completes++;
 	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
 	      // pick a random mito with DNA and without a DNA-complex
-	    case 3:
+	    case TARGET_DNA_NO_COMPLEX:
 	      do{
 		m1 = RND*NMITO;
 		completes++;
 	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
 	      // same mito gets all content
-	    case 4: break;
+	    case TARGET_RANDOM_BATCH: break;
+	    case TARGET_DAMAGE:
+	      do{
+		m1 = RND*NMITO;
+		completes++;
+	      }while(Query(M[m1], QUERY_DAMAGE) == 0 && completes < 10); break;	
 	    }
-	  if(completes < 10)
-	    Transfer(&N, &(M[m1]), r, k);
+	  if(completes == 10) m1 = RND*NMITO;
+	  //	  if(completes < 10)
+	  Transfer(&N, &(M[m1]), r, k);
 	}
       // fuse and exchange
       //printf("  fusion\n");
@@ -700,11 +723,11 @@ void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
 	}
       //printf("  decay\n");
       // decay old subunits
-      ProteinDecay(&N, t, P.LIFE);
+      ProteinDecay(&N, t, P);
       for(i = 0; i < NMITO; i++) {
-	ProteinDecay(&(M[i]), t, P.LIFE);
-	DNADamage(&(M[i]), P.MUT);
-	Process(&(M[i]));
+	ProteinDecay(&(M[i]), t, P);
+	DNADamage(&(M[i]), P);
+	Process(&(M[i]), P);
       }
 				    
       // output state
@@ -713,10 +736,10 @@ void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
 	{ 
 	  GetStats(M, &O);
 	  if(fp != NULL) {
-	  fprintf(fp, "%.3e,%i,%i,%i,%i,%.3e,", P.MUT, P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE);
-	  fprintf(fp, "%.3e,%.3e,%i,%i,", P.EXPRESSION, P.IMPORT, rep, t);
-	  fprintf(fp, "%i,%i,%.3e,%.3e,%.3e,%.3e,",O.completes, O.completes2, O.avprot, O.avdna, O.avprotempty, O.avprotfull);
-		  fprintf(fp, "%i,%.3e,%.3e,%i\n", O.maxdna, O.onedna, O.freesubs, O.damage);
+	    fprintf(fp, "%.3e,%.3e,%i,%i,%i,%i,%.3e,", P.SCANRATE, P.MUT, P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE);
+	    fprintf(fp, "%.3e,%.3e,%i,%i,", P.EXPRESSION, P.IMPORT, rep, t);
+	    fprintf(fp, "%i,%i,%.3e,%.3e,%.3e,%.3e,",O.completes, O.completes2, O.avprot, O.avdna, O.avprotempty, O.avprotfull);
+	    fprintf(fp, "%i,%.3e,%.3e,%i\n", O.maxdna, O.onedna, O.freesubs, O.damage);
 	  }
 	}
     }
@@ -739,12 +762,12 @@ void RunSimTest(void)
   
   printf("Testing simulation...\n");
 
-   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
-    fp = NULL;
+  M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
+  fp = NULL;
 
-    P.POISSON = 1; P.MUT = 0.1; P.TARGET = 0; P.SOCIAL = 0; P.SWAP = 0; P.LIFE = 24*7; P.EXPRESSION = 15; P.IMPORT = 15;
-    P.NFUSE = NMITO/2;
-    Simulate(P, fp, 0, M, &O);
+  P.POISSON = 1; P.MUT = 0.1; P.TARGET = 0; P.SOCIAL = 0; P.SWAP = 0; P.LIFE = 24*7; P.EXPRESSION = 15; P.IMPORT = 15;
+  P.NFUSE = NMITO/2;
+  Simulate(P, fp, 0, M, &O);
   for(i = 0; i < NMITO; i++)
     Output(M[i], 0);
   OutputStats(O);
@@ -783,11 +806,11 @@ int main(void)
   RunTest();
   //return 0;
 
-    M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
+  M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
 
-    RunSimTest();
+  RunSimTest();
     
-    //return 0;
+  //return 0;
   
   // say we have 10min as a time unit
   // NFUSE fusions -> each mito undergoes 2*NFUSE/NMITO fusions per unit time, so connected in NMITO/(2*NFUSE) timesteps
@@ -804,47 +827,50 @@ int main(void)
 
   sprintf(fstr, "sim-damage-%i.csv", NPROTS);
   fp = fopen(fstr, "w");
-  fprintf(fp, "mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
+  fprintf(fp, "scanrate,mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
 
   if(NPROTS == 5)
     {
-      minEXPRESSION = 15;
-      maxEXPRESSION = 50;
+      minEXPRESSION = 40;
+      maxEXPRESSION = 90;
     }
   else
     {
-      minEXPRESSION = 25;
-      maxEXPRESSION = 100;
+      minEXPRESSION = 4;
+      maxEXPRESSION = 20;
     }
   P.POISSON = 1;
-  for(P.MUT = 0; P.MUT <= 0.011; P.MUT += 0.005)
+  for(P.SCANRATE = 0.1; P.SCANRATE <= 1.1; P.SCANRATE += 0.45)
     {
-      for(P.TARGET = 0; P.TARGET <= 4; P.TARGET++)
+      for(P.MUT = 0.02; P.MUT <= 0.081; P.MUT *= 2)
 	{
-	  for(P.SOCIAL = 0; P.SOCIAL <= 1; P.SOCIAL++)
+	  for(P.TARGET = 0; P.TARGET <= 5; P.TARGET++)
 	    {
-	      for(P.SWAP = 0; P.SWAP <= 5; P.SWAP++)
+	      for(P.SOCIAL = 0; P.SOCIAL <= 1; P.SOCIAL++)
 		{
-		  P.NFUSE = NMITO/2;
-		  // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
-		  {
-		    P.LIFE = 24*7;
-		    //	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
+		  for(P.SWAP = 0; P.SWAP <= 5; P.SWAP++)
 		    {
-		      for(P.EXPRESSION = minEXPRESSION; P.EXPRESSION <= maxEXPRESSION; P.EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
+		      P.NFUSE = NMITO/2;
+		      // for(NFUSE = 0; NFUSE <= NMITO/2; NFUSE += NMITO/2)
+		      {
+			P.LIFE = 24*7;
+			//	      for(LIFE = 1; LIFE < 100; LIFE *= 2)
 			{
-			  P.IMPORT = P.EXPRESSION;
-			  //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
-			  {
-			    printf("%i,%i,%i,%i,%.3e,%.3e,%.3e\n", P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE, P.EXPRESSION, P.IMPORT);
-			    for(rep = 0; rep < NREP; rep++)
+			  for(P.EXPRESSION = minEXPRESSION; P.EXPRESSION <= maxEXPRESSION; P.EXPRESSION += (maxEXPRESSION-minEXPRESSION) )
+			    {
+			      P.IMPORT = P.EXPRESSION;
+			      //		      for(IMPORT = 100; IMPORT <= 1000; IMPORT *= 2)
 			      {
-				Simulate(P, fp, rep, M, &O); 
+				printf("%i,%i,%i,%i,%.3e,%.3e,%.3e\n", P.TARGET, P.SWAP, P.SOCIAL, P.NFUSE, P.LIFE, P.EXPRESSION, P.IMPORT);
+				for(rep = 0; rep < NREP; rep++)
+				  {
+				    Simulate(P, fp, rep, M, &O); 
+				  }
 			      }
-			  }
-			} 
+			    } 
+			}
+		      }
 		    }
-		  }
 		}
 	    }
 	}
