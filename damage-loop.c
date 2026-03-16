@@ -3,10 +3,23 @@
 
 #define RND drand48()
 
+// experiment types
+#define EXPT_NORMAL 0
+#define EXPT_TEMPLATE 1
+#define EXPT_COMPLEX 2
+
+// ----- change this to run different experiments
+// -- for EXPT_NORMAL and EXPT_COMPLEX we have NPROTS = 5, requiring monomers
+// -- for EXPT_TEMPLATE we have NPROTS = 1, requiring dimers
+int EXPT, NPROTS;
+
+//#define EXPT EXPT_COMPLEX
+//#define NPROTS (EXPT == EXPT_TEMPLATE ? 1 : 5)
+
 #define NMITO 300    // number of mitochondria
 #define MAXT 1000   // timescale
 #define NSAMP 100   // number of samples per expt
-#define NPROTS 5
+#define MAXTYPES 5
 #define MAXPROTS 100
 #define MAXDNA 200
 #define NREP 10
@@ -39,12 +52,6 @@
 #define REQ_PROTEIN 0
 #define REQ_DNA 1
 
-// experiment types
-#define EXPT_NORMAL 0
-#define EXPT_TEMPLATE 1
-
-int EXPT = (NPROTS == 5 ? EXPT_NORMAL : EXPT_TEMPLATE);
-
 // social rules
 #define SOCIAL_MTDNA 0
 #define SOCIAL_ALL_MITOS 1
@@ -53,8 +60,8 @@ int EXPT = (NPROTS == 5 ? EXPT_NORMAL : EXPT_TEMPLATE);
 // with birthdates (for lifespan) and damage states respectively
 // 0 = no damage, nonzero = some step on the repair pathway
 typedef struct tagCompartment {
-  int proteins[NPROTS];
-  int birthdates[NPROTS][MAXPROTS];
+  int proteins[MAXTYPES];
+  int birthdates[MAXTYPES][MAXPROTS];
   int DNA;
   int damage[MAXDNA];
 } Compartment;
@@ -173,6 +180,10 @@ void Process(Compartment *C, Params P)
 	}
       // if we've reached the end of the pathway, we are done
       if(C->damage[i] == NPROTS+1) C->damage[i] = 0;
+      // if we need all steps to occur simultaneously, and this hasn't happened, reset damage state
+      // (effectively modelling no activity for this mtDNA)
+      if(EXPT == EXPT_COMPLEX && C->damage[i] > 0)
+	C->damage[i] = 1;
     }
 }
 
@@ -775,7 +786,7 @@ void RunSimTest(void)
   
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
   Compartment N, *M;
   int i;
@@ -786,6 +797,17 @@ int main(void)
   int minEXPRESSION, maxEXPRESSION;
   Params P;
   Outputs O;
+
+  if(argc != 2) {
+    printf("Which experiment should I run? 0-2\n");
+    return 0;
+  }
+  EXPT = atoi(argv[1]);
+  if(EXPT < 0 || EXPT > 2) {
+    printf("Experiment not recognised. 0-2\n");
+    return 0;
+  }
+  NPROTS = (EXPT == EXPT_TEMPLATE ? 1 : 5);
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -825,10 +847,12 @@ int main(void)
   // i.e. each mito has 1 fusion events per 1hr unit
   // LIFE = 30h = 30 units
 
-  sprintf(fstr, "sim-damage-%i.csv", NPROTS);
+  sprintf(fstr, "sim-damage-%i.csv", EXPT);
   fp = fopen(fstr, "w");
   fprintf(fp, "scanrate,mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
 
+  // choose expression levels to obtain correct scale of per-mito copy number
+  // (4 for 5-protein pathway; 2 for MSH1-like templater)
   if(NPROTS == 5)
     {
       minEXPRESSION = 40;
