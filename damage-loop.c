@@ -797,17 +797,27 @@ int main(int argc, char *argv[])
   int minEXPRESSION, maxEXPRESSION;
   Params P;
   Outputs O;
-
+  int EXPTlabel;
+  
   if(argc != 2) {
-    printf("Which experiment should I run? 0-2\n");
+    printf("Which experiment should I run? 0-4\n");
     return 0;
   }
-  EXPT = atoi(argv[1]);
-  if(EXPT < 0 || EXPT > 2) {
-    printf("Experiment not recognised. 0-2\n");
+  EXPTlabel = atoi(argv[1]);
+  if(EXPT < 0 || EXPT > 4) {
+    printf("Experiment not recognised. 0-4\n");
     return 0;
   }
-  NPROTS = (EXPT == EXPT_TEMPLATE ? 1 : 5);
+    // choose expression levels to obtain correct scale of per-mito copy number
+  // (4 for 5-protein pathway; 2 for MSH1-like templater)
+
+  switch(EXPTlabel) {
+  case 0: EXPT = EXPT_NORMAL; NPROTS = 5; minEXPRESSION = 40; maxEXPRESSION = 90; break;
+  case 1: EXPT = EXPT_TEMPLATE; NPROTS = 1; minEXPRESSION = 4; maxEXPRESSION = 20; break;
+  case 2: EXPT = EXPT_COMPLEX; NPROTS = 5; minEXPRESSION = 40; maxEXPRESSION = 90; break;
+  case 3: EXPT = EXPT_NORMAL; NPROTS = 5; minEXPRESSION = 4; maxEXPRESSION = 20; break;
+  case 4: EXPT = EXPT_COMPLEX; NPROTS = 5; minEXPRESSION = 4; maxEXPRESSION = 20; break;
+  }
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
   // swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA; 4 no action
@@ -847,22 +857,10 @@ int main(int argc, char *argv[])
   // i.e. each mito has 1 fusion events per 1hr unit
   // LIFE = 30h = 30 units
 
-  sprintf(fstr, "sim-damage-%i.csv", EXPT);
+  sprintf(fstr, "sim-damage-%i.csv", EXPTlabel);
   fp = fopen(fstr, "w");
   fprintf(fp, "scanrate,mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
 
-  // choose expression levels to obtain correct scale of per-mito copy number
-  // (4 for 5-protein pathway; 2 for MSH1-like templater)
-  if(NPROTS == 5)
-    {
-      minEXPRESSION = 40;
-      maxEXPRESSION = 90;
-    }
-  else
-    {
-      minEXPRESSION = 4;
-      maxEXPRESSION = 20;
-    }
   P.POISSON = 1;
   for(P.SCANRATE = 0.1; P.SCANRATE <= 1.1; P.SCANRATE += 0.45)
     {
