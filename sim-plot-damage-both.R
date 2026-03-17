@@ -46,20 +46,31 @@ dev.off()
 
 ###### now use the data from simulations
 
-df.0 = read.csv(paste0("sim-damage-0.csv", collapse=""))
-df.1 = read.csv(paste0("sim-damage-1.csv", collapse=""))
-df.2 = read.csv(paste0("sim-damage-2.csv", collapse=""))
+if(FALSE) {
+  # use this to look at behaviour in unbiologically low copy number circumstances
+  df.0 = read.csv(paste0("sim-damage-0.csv", collapse=""))
+  df.1 = read.csv(paste0("sim-damage-3.csv", collapse=""))
+  df.2 = read.csv(paste0("sim-damage-4.csv", collapse=""))
 
-df.0$expt = "BER"
-df.1$expt = "Template"
-df.2$expt = "BER-complex"
+  expt.labels = c("BER", "BER-small", "BER-small-complex")
+} else {
+  df.0 = read.csv(paste0("sim-damage-0.csv", collapse=""))
+  df.1 = read.csv(paste0("sim-damage-1.csv", collapse=""))
+  df.2 = read.csv(paste0("sim-damage-2.csv", collapse=""))
+  
+  expt.labels = c("BER", "Template", "BER-complex")
+}
+
+df.0$expt = expt.labels[1]
+df.1$expt = expt.labels[2]
+df.2$expt = expt.labels[3]
 
 df = rbind(df.0[df.0$expression==min(df.0$expression),], 
            df.1[df.1$expression==min(df.1$expression),],
            df.2[df.2$expression==min(df.2$expression),])
-df$meanprot[df$expt=="Template"] = round(mean(df$avprot[df$expt == "Template"]))
-df$meanprot[df$expt=="BER"] = round(mean(df$avprot[df$expt == "BER"]))
-df$meanprot[df$expt=="BER-complex"] = round(mean(df$avprot[df$expt == "BER-complex"]))
+df$meanprot[df$expt==expt.labels[2]] = round(mean(df$avprot[df$expt == expt.labels[2]]))
+df$meanprot[df$expt==expt.labels[1]] = round(mean(df$avprot[df$expt == expt.labels[1]]))
+df$meanprot[df$expt==expt.labels[3]] = round(mean(df$avprot[df$expt == expt.labels[3]]))
 
 # target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
 # swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA
@@ -106,19 +117,19 @@ df_mean <- df_big %>%
     .groups = "drop"
   )
 fig.s3 = ggarrange(
-  ggplot(df_mean[df_mean$expt=="BER" & df_mean$social=="DNA-bearing",], 
+  ggplot(df_mean[df_mean$expt==expt.labels[1] & df_mean$social=="DNA-bearing",], 
          aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
     geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
     theme(axis.text.x = element_text(angle=90)) +
     labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA") +
     facet_grid("scan="+scanrate ~ "mu="+mut),
-ggplot(df_mean[df_mean$expt=="Template" & df_mean$social=="DNA-bearing",], 
+ggplot(df_mean[df_mean$expt==expt.labels[2] & df_mean$social=="DNA-bearing",], 
        aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
   geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
   theme(axis.text.x = element_text(angle=90)) +
   labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA") +
   facet_grid("scan="+scanrate ~ "mu="+mut),
-ggplot(df_mean[df_mean$expt=="BER-complex" & df_mean$social=="DNA-bearing",], 
+ggplot(df_mean[df_mean$expt==expt.labels[3] & df_mean$social=="DNA-bearing",], 
        aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
   geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
   theme(axis.text.x = element_text(angle=90)) +
@@ -157,14 +168,14 @@ fig.2
 
 fig.2.new = 
   ggarrange(
-    ggplot(df_sub[df_sub$expt == "BER",], 
+    ggplot(df_sub[df_sub$expt == expt.labels[1],], 
            aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
       # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
       theme(axis.text.x = element_text(angle=90), legend.position="none") +
       labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
            color = "Mean\nproteins\nper\nmito") ,
     ggarrange(
-      ggplot(df_sub[df_sub$expt == "Template",], 
+      ggplot(df_sub[df_sub$expt == expt.labels[2],], 
              aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
         # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
         theme(axis.text.x = element_text(angle=90), legend.position="none") +
@@ -172,7 +183,7 @@ fig.2.new =
              color = "Mean\nproteins\nper\nmito") 
     ),
     ggarrange(
-      ggplot(df_sub[df_sub$expt == "BER-complex",], 
+      ggplot(df_sub[df_sub$expt == expt.labels[3],], 
              aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
         # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
         theme(axis.text.x = element_text(angle=90), legend.position="none") +
@@ -205,19 +216,19 @@ fig.3 = ggarrange(
 fig.3
 
 fig.3.new = ggarrange(
-  ggplot(df_sub[df_sub$expt == "BER",], aes(x = swap, y = avdamage, color=factor(social))) + 
+  ggplot(df_sub[df_sub$expt == expt.labels[1],], aes(x = swap, y = avdamage, color=factor(social))) + 
     geom_boxplot() +
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
          color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub[df_sub$expt == "Template",], aes(x = swap, y = avdamage, color=factor(social))) + 
+  ggplot(df_sub[df_sub$expt == expt.labels[2],], aes(x = swap, y = avdamage, color=factor(social))) + 
     geom_boxplot() +
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
          color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub[df_sub$expt == "BER-complex",], aes(x = swap, y = avdamage, color=factor(social))) + 
+  ggplot(df_sub[df_sub$expt == expt.labels[3],], aes(x = swap, y = avdamage, color=factor(social))) + 
     geom_boxplot() +
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
