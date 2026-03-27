@@ -60,6 +60,7 @@ if(FALSE) {
   
   expt.labels = c("BER", "Template", "BER-complex")
 }
+expt.set = c("BER", "Template")
 
 df.0$expt = expt.labels[1]
 df.1$expt = expt.labels[2]
@@ -75,12 +76,15 @@ df$meanprot[df$expt==expt.labels[3]] = round(mean(df$avprot[df$expt == expt.labe
 # target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
 # swap: 0 random subunits, 1 random subunits and DNA, 2 subunit sets, 3 random subunits and DNA only for mitos with DNA
 
-target.labels = c("Random", "DNA-bearing", "No DNA-complex", "DNA-bearing,\nno DNA-complex", "Random by\nbatch", "Damaged")
-swap.labels = c("None", "Subunits", "DNA + Subunits", "DNA-Complexes", "Complexes", "DNA-complexes +\nComplexes")
+target.labels = c("Random", "DNA-bearing", "Incomplete", "DNA-bearing,\nincomplete", "Random by\nbatch", "Damaged")
+swap.labels = c("None", "Subunits", "DNA + Subunits", "DNA-Metabolons", "Metabolons", "DNA-Metabolons +\nMetabolons")
 social.labels = c("DNA-bearing", "All mitos")
 df$target = target.labels[df$target+1]
 df$swap = swap.labels[df$swap+1]
 df$social = social.labels[df$social+1]
+
+# exclude random by batch
+df = df[df$target != "Random by\nbatch",]
 
 #### demo that t=900 and t=1000 are comparbale
 set.1 = df[df$t==900,]
@@ -116,7 +120,7 @@ df_mean <- df_big %>%
     avdamage = mean(avdamage, na.rm=TRUE),
     .groups = "drop"
   )
-fig.s3 = ggarrange(
+fig.s3.list = list(
   ggplot(df_mean[df_mean$expt==expt.labels[1] & df_mean$social=="DNA-bearing",], 
          aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
     geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
@@ -134,19 +138,19 @@ ggplot(df_mean[df_mean$expt==expt.labels[3] & df_mean$social=="DNA-bearing",],
   geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
   theme(axis.text.x = element_text(angle=90)) +
   labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA") +
-  facet_grid("scan="+scanrate ~ "mu="+mut),
-nrow=3,
-labels=c("A", "B", "C")
-)
+  facet_grid("scan="+scanrate ~ "mu="+mut) )
+fig.s3 = ggarrange(plotlist=fig.s3.list[1:2], nrow=2, labels=c("A", "B"))
+#fig.s3 = ggarrange(plotlist=fig.s3.list[1:3], nrow=3, labels=c("A", "B", "C"))
+
 fig.s3
 
 ######## from now on, zoom in to a particular mutation and scan rate
 df = df[df$t == 1000 & df$mut == 0.04 & df$scanrate == 1,]
 
 # switch off exchange and ask questions about targetting
-df_sub <- df[df$swap == "None" & df$social == "All mitos",]
+df_sub <- df[df$swap == "None" & df$social == "All mitos" & df$expt %in% expt.set,]
 fig.2 = ggarrange(
-  ggplot(df_sub, aes(x = target, y = completes, color=factor(meanprot))) + 
+  ggplot(df_sub[df_sub$expt == "BER",], aes(x = target, y = completes, color=factor(meanprot))) + 
     geom_boxplot() +
     #geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     #geom_jitter(position="dodge",size=bs.size) +   
@@ -154,7 +158,7 @@ fig.2 = ggarrange(
     labs(x = "Targetting rule\n(no exchange)", y = "MtDNAs with\nprotein", 
          color = "Mean\nproteins\nper\nmito") +
     ylim(0,100) + facet_wrap(~expt),
-  ggplot(df_sub, aes(x = target, y = completes2, color=factor(meanprot))) + 
+  ggplot(df_sub[df_sub$expt == "Template",], aes(x = target, y = completes2, color=factor(meanprot))) + 
     geom_boxplot() +
     # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
@@ -166,8 +170,8 @@ fig.2 = ggarrange(
 )
 fig.2
 
-fig.2.new = 
-  ggarrange(
+fig.2.new.list = 
+  list(
     ggplot(df_sub[df_sub$expt == expt.labels[1],], 
            aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
       # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
@@ -189,14 +193,14 @@ fig.2.new =
         theme(axis.text.x = element_text(angle=90), legend.position="none") +
         labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
              color = "Mean\nproteins\nper\nmito") 
-    ),
-    labels=c("A", "B", "C"),
-    nrow=1
-  )
+    ))
+
+fig.2.new = ggarrange(plotlist=fig.2.new.list[1:2], nrow=1, labels=c("A", "B"))
+#fig.2.new = ggarrange(plotlist=fig.2.new.list[1:3], nrow=1, labels=c("A", "B", "C"))
 fig.2.new
 
 # next question -- with random targetting, how does different exchange influence completeness 
-df_sub <- df[df$target == "Random",]
+df_sub <- df[df$target == "Random" & df$expt %in% expt.set,]
 fig.3 = ggarrange(
   ggplot(df_sub, aes(x = swap, y = completes, color=factor(social))) + 
     geom_boxplot() +
@@ -215,7 +219,7 @@ fig.3 = ggarrange(
 )
 fig.3
 
-fig.3.new = ggarrange(
+fig.3.new.list = list(
   ggplot(df_sub[df_sub$expt == expt.labels[1],], aes(x = swap, y = avdamage, color=factor(social))) + 
     geom_boxplot() +
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
@@ -233,15 +237,16 @@ fig.3.new = ggarrange(
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
-         color = "Mitos\nallowed\nto fuse") ,
-  labels=c("A", "B", "C"),
-  nrow=1
-)
+         color = "Mitos\nallowed\nto fuse"))
+
+fig.3.new = ggarrange(plotlist=fig.3.new.list[1:2], nrow=1, labels=c("A", "B"))
+#fig.3.new = ggarrange(plotlist=fig.3.new.list[1:3], nrow=1, labels=c("A", "B", "C"))
+
 fig.3.new
 
 
 # next question -- targetting vs swapping
-df_sub_strip <- df[df$scanrate ==1,c("expt", "target", "swap", "social", "avdamage")]
+df_sub_strip <- df[df$scanrate ==1 & df$expt %in% expt.set,c("expt", "target", "swap", "social", "avdamage")]
 df_mean <- df_sub_strip %>%
   group_by(across(-c(avdamage))) %>%   # group by all other columns
   summarise(
