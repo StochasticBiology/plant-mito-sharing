@@ -170,27 +170,30 @@ fig.2 = ggarrange(
 )
 fig.2
 
+bs.size = 2
 fig.2.new.list = 
   list(
     ggplot(df_sub[df_sub$expt == expt.labels[1],], 
-           aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
-      # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
-      theme(axis.text.x = element_text(angle=90), legend.position="none") +
+           aes(x = target, y = avdamage, fill=target)) + geom_boxplot() +
+      geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal()+   
+      theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
+      scale_fill_viridis_d() +
       labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
            color = "Mean\nproteins\nper\nmito") ,
     ggarrange(
       ggplot(df_sub[df_sub$expt == expt.labels[2],], 
-             aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
-        # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
-        theme(axis.text.x = element_text(angle=90), legend.position="none") +
+             aes(x = target, y = avdamage, fill=target)) + geom_boxplot() +
+        geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal()+   
+        theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
+        scale_fill_viridis_d() +
         labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
-             color = "Mean\nproteins\nper\nmito") 
+             color = "Mean\nproteins\nper\nmito")  
     ),
     ggarrange(
       ggplot(df_sub[df_sub$expt == expt.labels[3],], 
-             aes(x = target, y = avdamage, color=factor(meanprot))) + geom_boxplot() +
-        # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
-        theme(axis.text.x = element_text(angle=90), legend.position="none") +
+             aes(x = target, y = avdamage)) + geom_boxplot() +
+        geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal() +   
+        theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
         labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
              color = "Mean\nproteins\nper\nmito") 
     ))
@@ -219,27 +222,35 @@ fig.3 = ggarrange(
 )
 fig.3
 
+bs.size = 1
 fig.3.new.list = list(
-  ggplot(df_sub[df_sub$expt == expt.labels[1],], aes(x = swap, y = avdamage, color=factor(social))) + 
+  ggplot(df_sub[df_sub$expt == expt.labels[1],], aes(x = swap, y = avdamage, 
+                                                     color=factor(social))) + 
     geom_boxplot() +
-    #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
-    theme(axis.text.x = element_text(angle=90)) +
+    scale_fill_viridis_d() + 
+   # geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle=45,hjust=1)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
          color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub[df_sub$expt == expt.labels[2],], aes(x = swap, y = avdamage, color=factor(social))) + 
+  ggplot(df_sub[df_sub$expt == expt.labels[2],], aes(x = swap, y = avdamage, 
+                                                     color=factor(social))) + 
     geom_boxplot() +
-    #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
-    theme(axis.text.x = element_text(angle=90)) +
+    #  geom_beeswarm(size=bs.size, dodge.width=dw.size) + 
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle=45,hjust=1)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
          color = "Mitos\nallowed\nto fuse") ,
-  ggplot(df_sub[df_sub$expt == expt.labels[3],], aes(x = swap, y = avdamage, color=factor(social))) + 
-    geom_boxplot() +
+  ggplot(df_sub[df_sub$expt == expt.labels[3],], aes(x = swap, y = avdamage, 
+                                                     color=factor(social))) + 
+    geom_boxplot(color="black") +
+    scale_fill_viridis_d() + 
     #  geom_beeswarm(size=bs.size, dodge.width=dw.size) +   
     theme(axis.text.x = element_text(angle=90)) +
     labs(x = "Exchange rule\n(random targetting)", y = "Proportion\ndamaged mtDNA", 
          color = "Mitos\nallowed\nto fuse"))
 
-fig.3.new = ggarrange(plotlist=fig.3.new.list[1:2], nrow=1, labels=c("A", "B"))
+fig.3.new = ggarrange(plotlist=fig.3.new.list[1:2], nrow=2, labels=c("A", "B"))
 #fig.3.new = ggarrange(plotlist=fig.3.new.list[1:3], nrow=1, labels=c("A", "B", "C"))
 
 fig.3.new
@@ -297,7 +308,7 @@ dev.off()
 png(paste0("fig-2-new.png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
 print(fig.2.new)
 dev.off()
-png(paste0("fig-3-new.png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
+png(paste0("fig-3-new.png", collapse=""), width=400*sf, height=400*sf, res=72*sf)
 print(fig.3.new)
 dev.off()
 png(paste0("fig-4-new.png", collapse=""), width=650*sf, height=450*sf, res=72*sf)
