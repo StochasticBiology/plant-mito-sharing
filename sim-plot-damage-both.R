@@ -273,21 +273,22 @@ fig.4.new =
   labs(x = "Targetting rule", y = "Exchange rule", fill = "Proportion\ndamaged\nmtDNA")
 fig.4.new
 
-
+if(FALSE) {
 df_sub = df_sub_strip
 my.aov = aov(avdamage ~ target *swap, data=df_sub)
 
 #my.aov = aov(completes ~ target *swap, data=df_sub)
 summary(my.aov)
 interaction.plot(df_sub$target, df_sub$swap, df_sub$avdamage)
-my.aov = aov(completes ~ target + swap, data=df_sub)
-TukeyHSD(my.aov)
+#my.aov = aov(completes ~ target + swap, data=df_sub)
+#TukeyHSD(my.aov)
 
-my.aov = aov(completes2 ~ target *swap, data=df_sub)
-summary(my.aov)
+#my.aov = aov(completes2 ~ target *swap, data=df_sub)
+#summary(my.aov)
 interaction.plot(df_sub$target, df_sub$swap, df_sub$completes2)
 my.aov = aov(completes2 ~ target + swap, data=df_sub)
 TukeyHSD(my.aov)
+}
 
 sf = 2
 
@@ -304,7 +305,6 @@ png(paste0("fig-s3-new.png", collapse=""), width=600*sf, height=750*sf, res=72*s
 print(fig.s3)
 dev.off()
 
-
 png(paste0("fig-2-new.png", collapse=""), width=600*sf, height=250*sf, res=72*sf)
 print(fig.2.new)
 dev.off()
@@ -315,3 +315,7 @@ png(paste0("fig-4-new.png", collapse=""), width=650*sf, height=450*sf, res=72*sf
 print(fig.4.new)
 dev.off()
 
+ggsave("max-fig-1.svg", fig.1, width = 7, height=5)
+ggsave("max-fig-2.svg", fig.2.new, width = 6, height=4)
+ggsave("max-fig-3.svg", fig.3.new, width = 4, height = 6)
+ggsave("max-fig-4.svg", fig.4.new, width=6.5, height = 5)
