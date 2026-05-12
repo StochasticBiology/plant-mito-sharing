@@ -202,6 +202,39 @@ fig.2.new = ggarrange(plotlist=fig.2.new.list[1:2], nrow=1, labels=c("A", "B"))
 #fig.2.new = ggarrange(plotlist=fig.2.new.list[1:3], nrow=1, labels=c("A", "B", "C"))
 fig.2.new
 
+bs.size = 2
+fig.2.max.list = 
+  list(
+    ggplot(df_sub[df_sub$expt == expt.labels[1] & df_sub$target != "Incomplete",], 
+           aes(x = target, y = avdamage, fill=target)) + geom_boxplot() +
+      geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal()+   
+      theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
+      scale_fill_viridis_d() +
+      labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
+           color = "Mean\nproteins\nper\nmito") ,
+    ggarrange(
+      ggplot(df_sub[df_sub$expt == expt.labels[2] & df_sub$target != "Incomplete",], 
+             aes(x = target, y = avdamage, fill=target)) + geom_boxplot() +
+        geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal()+   
+        theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
+        scale_fill_viridis_d() +
+        labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
+             color = "Mean\nproteins\nper\nmito")  
+    ),
+    ggarrange(
+      ggplot(df_sub[df_sub$expt == expt.labels[3],], 
+             aes(x = target, y = avdamage)) + geom_boxplot() +
+        geom_beeswarm(size=bs.size, dodge.width=dw.size) + theme_minimal() +   
+        theme(axis.text.x = element_text(angle=45, hjust=1), legend.position="none") +
+        labs(x = "Targetting rule\n(no exchange)", y = "Proportion\ndamaged mtDNA", 
+             color = "Mean\nproteins\nper\nmito") 
+    ))
+
+fig.2.new.max = ggarrange(plotlist=fig.2.max.list[1:2], nrow=1, labels=c("", ""))
+#fig.2.new = ggarrange(plotlist=fig.2.new.list[1:3], nrow=1, labels=c("A", "B", "C"))
+fig.2.new.max
+
+
 # next question -- with random targetting, how does different exchange influence completeness 
 df_sub <- df[df$target == "Random" & df$expt %in% expt.set,]
 fig.3 = ggarrange(
@@ -324,3 +357,5 @@ ggsave("max-fig-s0.svg", fig.s0, width = 10, height=5)
 ggsave("max-fig-s1.svg", fig.2, width = 7, height=5)
 ggsave("max-fig-s2.svg", fig.3, width = 7, height=8)
 ggsave("max-fig-s3.svg", fig.s3, width = 7, height=9)
+
+ggsave("max-fig-2-new.svg", fig.2.new.max, width = 6, height=4)
