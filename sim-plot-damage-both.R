@@ -319,3 +319,8 @@ ggsave("max-fig-1.svg", fig.1, width = 7, height=5)
 ggsave("max-fig-2.svg", fig.2.new, width = 6, height=4)
 ggsave("max-fig-3.svg", fig.3.new, width = 4, height = 6)
 ggsave("max-fig-4.svg", fig.4.new, width=6.5, height = 5)
+
+ggsave("max-fig-s0.svg", fig.s0, width = 10, height=5)
+ggsave("max-fig-s1.svg", fig.2, width = 7, height=5)
+ggsave("max-fig-s2.svg", fig.3, width = 7, height=8)
+ggsave("max-fig-s3.svg", fig.s3, width = 7, height=9)
