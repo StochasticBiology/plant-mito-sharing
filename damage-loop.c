@@ -795,28 +795,31 @@ int main(int argc, char *argv[])
   int rep;
   char fstr[100];
   int minEXPRESSION, maxEXPRESSION;
+  double minMUT, maxMUT;
   Params P;
   Outputs O;
   int EXPTlabel;
   
   if(argc != 2) {
-    printf("Which experiment should I run? 0-4\n");
+    printf("Which experiment should I run? 0-5\n");
     return 0;
   }
   EXPTlabel = atoi(argv[1]);
-  if(EXPT < 0 || EXPT > 4) {
-    printf("Experiment not recognised. 0-4\n");
+  if(EXPT < 0 || EXPT > 5) {
+    printf("Experiment not recognised. 0-5\n");
     return 0;
   }
     // choose expression levels to obtain correct scale of per-mito copy number
   // (4 for 5-protein pathway; 2 for MSH1-like templater)
 
+  minMUT = 0.02; maxMUT = 0.081;
   switch(EXPTlabel) {
   case 0: EXPT = EXPT_NORMAL; NPROTS = 5; minEXPRESSION = 40; maxEXPRESSION = 90; break;
   case 1: EXPT = EXPT_TEMPLATE; NPROTS = 1; minEXPRESSION = 4; maxEXPRESSION = 20; break;
   case 2: EXPT = EXPT_COMPLEX; NPROTS = 5; minEXPRESSION = 40; maxEXPRESSION = 90; break;
   case 3: EXPT = EXPT_NORMAL; NPROTS = 5; minEXPRESSION = 4; maxEXPRESSION = 20; break;
   case 4: EXPT = EXPT_COMPLEX; NPROTS = 5; minEXPRESSION = 4; maxEXPRESSION = 20; break;
+  case 5: EXPT = EXPT_TEMPLATE; NPROTS = 1; minEXPRESSION = 4; maxEXPRESSION = 20; minMUT = 0.002; maxMUT = 0.0081; break;
   }
   
   // target: 0 random, 1 only DNA, 2 only without DNA-complex, 3 only with DNA without complex, 4 all in one
@@ -864,7 +867,7 @@ int main(int argc, char *argv[])
   P.POISSON = 1;
   for(P.SCANRATE = 0.1; P.SCANRATE <= 1.1; P.SCANRATE += 0.45)
     {
-      for(P.MUT = 0.02; P.MUT <= 0.081; P.MUT *= 2)
+      for(P.MUT = minMUT; P.MUT <= maxMUT; P.MUT *= 2)
 	{
 	  for(P.TARGET = 0; P.TARGET <= 5; P.TARGET++)
 	    {
