@@ -4,6 +4,9 @@
 #define RND drand48()
 
 // experiment types
+// 0 -- BER pathway where we don't require all proteins together simultaneously
+// 1 -- TR pathway
+// 2 -- BER pathway where we do require all proteins together simultaneously
 #define EXPT_NORMAL 0
 #define EXPT_TEMPLATE 1
 #define EXPT_COMPLEX 2
@@ -12,6 +15,7 @@
 // -- for EXPT_NORMAL and EXPT_COMPLEX we have NPROTS = 5, requiring monomers
 // -- for EXPT_TEMPLATE we have NPROTS = 1, requiring dimers
 int EXPT, NPROTS;
+int CHOOSE_RANDOM;
 
 //#define EXPT EXPT_COMPLEX
 //#define NPROTS (EXPT == EXPT_TEMPLATE ? 1 : 5)
@@ -22,7 +26,7 @@ int EXPT, NPROTS;
 #define MAXTYPES 5
 #define MAXPROTS 100
 #define MAXDNA 200
-#define NREP 10
+#define NREP 30
 
 // different output statistics for a mitochondrion
 #define QUERY_COMPLEX 0
@@ -89,11 +93,13 @@ typedef struct tagOutput {
   int damage;
 } Outputs;
 
-
 // pop a protein from a compartment's set
 void Pop(Compartment *C, int chem, int ref)
 {
-  if(ref > C->proteins[chem]) return;
+  if(ref >= C->proteins[chem]) {
+    printf("Oops, attempt to pop absent protein?\n");
+    return;
+  }
   int i;
   for(i = ref; i < C->proteins[chem]-1; i++)
     {
@@ -105,7 +111,11 @@ void Pop(Compartment *C, int chem, int ref)
 // push a protein, with birthdate, into a compartment's set
 void Push(Compartment *C, int chem, int birthdate)
 {
-  if(C->proteins[chem] > MAXPROTS-1) return;
+  if(C->proteins[chem] > MAXPROTS-1) {
+    // allow quiet fail here
+    //printf("Oops, too much protein?\n");
+    return;
+  }
   int i = C->proteins[chem];
   C->birthdates[chem][i] = birthdate;
   C->proteins[chem] += 1;
@@ -114,6 +124,11 @@ void Push(Compartment *C, int chem, int birthdate)
 // push DNA, with damage ref, into a compartment
 void PushDNA(Compartment *C, int damage)
 {
+  if(C->DNA >= MAXDNA)
+    {
+      printf("Somehow too much DNA!\n");
+      exit(0);
+    }
   C->damage[C->DNA] = damage;
   (C->DNA)++;
 }
@@ -121,7 +136,10 @@ void PushDNA(Compartment *C, int damage)
 // pop DNA from a compartment
 void PopDNA(Compartment *C, int ref)
 {
-  if(ref > C->DNA) return;
+  if(ref >= C->DNA) {
+    printf("Oops, attempt to pop absent DNA?\n");
+    return;
+  }
   int i;
   for(i = ref; i < C->DNA-1; i++)
     {
@@ -140,7 +158,7 @@ void Empty(Compartment *C)
 }
 
 // how many, of which molecule type, are required for a repair step in this experiment
-int required(int moltype, int process)
+int required(int moltype)
 {
   if(EXPT == EXPT_TEMPLATE) {
     if(moltype == REQ_PROTEIN) return 2;
@@ -163,7 +181,7 @@ void Process(Compartment *C, Params P)
       for(j = 0; j < NPROTS; j++)
 	{
 	  // if we are at this step and have sufficient proteins, repair
-	  if(C->damage[i] == j+1 && C->proteins[j] >= required(REQ_PROTEIN, j) && C->DNA >= required(REQ_DNA, j) )
+	  if(C->damage[i] == j+1 && C->proteins[j] >= required(REQ_PROTEIN) && C->DNA >= required(REQ_DNA) )
 	    {
 	      // if this is the first damage step, give every protein a chance at finding the damage and making the first step
 	      if(j+1 == 1) {
@@ -595,7 +613,10 @@ void OutputStats(Outputs O)
 {
   printf("  %.3f average protein\n", O.avprot);
   printf("  %i nucleoprot %i templaters\n", O.completes, O.completes2);
-  printf("  %i damage %.3f av DNA %.3f damage percent\n", O.damage, O.avdna, O.damage/(O.avdna*NMITO));
+  if(O.avdna > 0)
+    printf("  %i damage %.3f av DNA %.3f damage percent\n", O.damage, O.avdna, (float)O.damage/(O.avdna*NMITO));
+  else
+    printf("Somehow no average DNA!\n");
 }
 
 // get some useful statistics from a compartment
@@ -630,12 +651,14 @@ void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
   int k;
   int completes, completes2;
   Outputs O;
+  int check;
+  int posslist[NMITO];
+  int nposs;
   
   M = (Compartment*)malloc(sizeof(Compartment)*NMITO);
   
   // empty nucleus
-  for(i = 0; i < NMITO; i++)
-    Empty(&N);
+  Empty(&N);
   // empty all mitos
   for(i = 0; i < NMITO; i++)
     Empty(&(M[i]));
@@ -656,81 +679,126 @@ void Simulate(Params P, FILE *fp, int rep, Compartment *Mret, Outputs *Oret)
 	  r = RND*NPROTS;
 	  Push(&N, r, t);
 	}
-      //printf("  import\n");
-      // transfer random nuclear content to random mito
-      m1 = RND*NMITO;
+      
+      // construct a list of mitos for possible import according to import criterion
+      nposs = 0;
+      switch(P.TARGET)
+	{
+	  // just pick a random mito
+	case TARGET_RANDOM:
+	  for(check = 0; check < NMITO; check++)
+	    posslist[nposs++] = check;
+	  break;
+	      
+	  // pick a random mito with DNA
+	case TARGET_DNA_BEARING:
+	  nposs = 0;
+	  for(check = 0; check < NMITO; check++)
+	    {
+	      if(Query(M[check], QUERY_DNA) != 0)
+		{
+		  posslist[nposs++] = check;
+		}
+	    }
+	  break;
+	      
+	  // pick a random mito without a DNA-complex
+	case TARGET_NO_NUCLEOPROTEIN:
+	  nposs = 0;
+	  for(check = 0; check < NMITO; check++)
+	    {
+	      if(Query(M[check], QUERY_NUCLEOPROTEIN) == 0)
+		{
+		  posslist[nposs++] = check;
+		}
+	    }
+	  break;
+	      
+	  // pick a random mito with DNA and without a DNA-complex
+	case TARGET_DNA_NO_COMPLEX:
+	  nposs = 0;
+	  for(check = 0; check < NMITO; check++)
+	    {
+	      if(Query(M[check], QUERY_NUCLEOPROTEIN) == 0 && Query(M[check], QUERY_DNA) != 0)
+		{
+		  posslist[nposs++] = check;
+		}
+	    }
+	  break;
+	      
+	  // same mito gets all content
+	case TARGET_RANDOM_BATCH:
+	  posslist[0] = RND*NMITO;
+	  nposs = 1;
+	  break;
+
+	  // pick a random mito with damage
+	case TARGET_DAMAGE:
+	  nposs = 0;
+	  for(check = 0; check < NMITO; check++)
+	    {
+	      if(Query(M[check], QUERY_DAMAGE) != 0)
+		{
+		  posslist[nposs++] = check;
+		}
+	    }
+	  break;
+	}
+
+      //  transfer random nuclear content to mitos randomly chosen from this list
       for(i = 0; i < P.IMPORT; i++)
 	{
 	  r = RND*NPROTS;
+	  if(N.proteins[r] == 0) continue;
 	  k = RND*N.proteins[r];
-	  completes = 0;
-	  switch(P.TARGET)
-	    {
-	      // just pick a random mito
-	    case TARGET_RANDOM: m1 = RND*NMITO; break;
-	      // pick a random mito with DNA
-	    case TARGET_DNA_BEARING: 
-	      do{
-		m1 = RND*NMITO;
-	      }while(!(Query(M[m1], QUERY_DNA) != 0)); break;
-	      // pick a random mito without a DNA-complex
-	    case TARGET_NO_NUCLEOPROTEIN:
-	      do{
-		m1 = RND*NMITO;
-		completes++;
-	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0) && completes < 10); break;
-	      // pick a random mito with DNA and without a DNA-complex
-	    case TARGET_DNA_NO_COMPLEX:
-	      do{
-		m1 = RND*NMITO;
-		completes++;
-	      }while(!(Query(M[m1], QUERY_NUCLEOPROTEIN) == 0 && Query(M[m1], QUERY_DNA) != 0) && completes < 10); break;
-	      // same mito gets all content
-	    case TARGET_RANDOM_BATCH: break;
-	    case TARGET_DAMAGE:
-	      do{
-		m1 = RND*NMITO;
-		completes++;
-	      }while(Query(M[m1], QUERY_DAMAGE) == 0 && completes < 10); break;	
-	    }
-	  if(completes == 10) m1 = RND*NMITO;
-	  //	  if(completes < 10)
-	  Transfer(&N, &(M[m1]), r, k);
+
+	  if(nposs == 0)
+	    m1 = -1;
+	  else
+	    m1 = posslist[(int)(RND*nposs)];
+	  
+	  if(m1 == -1 && CHOOSE_RANDOM) 
+	    m1 = RND*NMITO;
+	  
+	  if(m1 != -1)
+  	    Transfer(&N, &(M[m1]), r, k);
 	}
       // fuse and exchange
       //printf("  fusion\n");
 
+      // make list of fuseable mitos
+      nposs = 0;
+      if(P.SOCIAL == SOCIAL_ALL_MITOS)
+	{
+	  for(check = 0; check < NMITO; check++)
+	    posslist[nposs++] = check;
+	}
+      else {
+	for(check = 0; check < NMITO; check++)
+	  {
+	    if(Query(M[check], QUERY_DNA) != 0)
+	      {
+		posslist[nposs++] = check;
+	      }
+	  }
+      }
+			      
+      // fuse mitos randomly chosen from this list
       for(i = 0; i < P.NFUSE; i++)
 	{
-	  /// first choose the mitos
-	  if(P.SOCIAL == SOCIAL_ALL_MITOS)
-	    {
-	      // just choose random mitos
-	      do{ 
-		m1 = RND*NMITO;
-		m2 = RND*NMITO;
-	      }while(m1 == m2);
-	    }
-	  else
-	    {
-	      // choose random mitos bearing mtDNA
-	      completes = 0;
-	      do{
-		m1 = RND*NMITO;
-		m2 = RND*NMITO;
-		completes++;
-	      }while(m1 == m2 || Query(M[m1], QUERY_DNA) == 0 || Query(M[m2], QUERY_DNA) == 0 && completes < 10);
-	    }
-	  //// then choose what to exchange
-	  //    Output(M[m1]);
-	  //Output(M[m2]);
-	  //printf("%i %i: %i %i\n", i, SWAP, m1, m2);
-	  // running out of mitos with DNA?
-	  if(completes != 10)
-	    Mix(&(M[m1]), &(M[m2]), P.SWAP);
-	  //		      Output(M[m1]);
-	  // Output(M[m2]);
-		
+	  if(nposs == 0) {
+	    printf("Somehow no mitos with DNA!\n");
+	    exit(0);
+	  }
+	  if(nposs > 1) {
+	    do{
+	      m1 = posslist[(int)(RND*nposs)];
+	      m2 = posslist[(int)(RND*nposs)];
+	    }while(m1 == m2);
+	  } else m1 = m2 = posslist[0];
+	    
+	  Mix(&(M[m1]), &(M[m2]), P.SWAP);
+    		
 	}
       //printf("  decay\n");
       // decay old subunits
@@ -800,16 +868,22 @@ int main(int argc, char *argv[])
   Outputs O;
   int EXPTlabel;
   
-  if(argc != 2) {
-    printf("Which experiment should I run? 0-5\n");
+  if(argc != 3) {
+    printf("Which experiment should I run? 0-5 and should I choose random mitos when I can't choose principled? 0-1\n");
     return 0;
   }
   EXPTlabel = atoi(argv[1]);
-  if(EXPT < 0 || EXPT > 5) {
+  if(EXPTlabel < 0 || EXPTlabel > 5) {
     printf("Experiment not recognised. 0-5\n");
     return 0;
   }
-    // choose expression levels to obtain correct scale of per-mito copy number
+  CHOOSE_RANDOM = atoi(argv[2]);
+  if(CHOOSE_RANDOM !=  0 && CHOOSE_RANDOM != 1) {
+    printf("Choose-random not recognised. 0-1\n");
+    return 0;
+  }
+
+  // choose expression levels to obtain correct scale of per-mito copy number
   // (4 for 5-protein pathway; 2 for MSH1-like templater)
 
   minMUT = 0.02; maxMUT = 0.081;
@@ -860,7 +934,7 @@ int main(int argc, char *argv[])
   // i.e. each mito has 1 fusion events per 1hr unit
   // LIFE = 30h = 30 units
 
-  sprintf(fstr, "sim-damage-%i.csv", EXPTlabel);
+  sprintf(fstr, "sim-damage-update-%i-%i.csv", EXPTlabel, CHOOSE_RANDOM);
   fp = fopen(fstr, "w");
   fprintf(fp, "scanrate,mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
 
