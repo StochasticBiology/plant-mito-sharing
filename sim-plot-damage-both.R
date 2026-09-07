@@ -151,22 +151,25 @@ fig.s3.list = list(
   ggplot(df_mean[df_mean$expt==expt.labels[1] & df_mean$social=="DNA-bearing",], 
          aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
     geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
-    theme(axis.text.x = element_text(angle=90)) +
+    theme(axis.text.x = element_text(angle=90),
+          strip.text.y = element_text(angle = 90)) +
     labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA (%)") +
-    facet_grid("scan="+scanrate ~ "mu="+mut),
+    facet_grid(scanrate+"scan=" ~ "mu="+mut),
 ggplot(df_mean[df_mean$expt==expt.labels[2] & df_mean$social=="DNA-bearing",], 
        aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
   geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
-  theme(axis.text.x = element_text(angle=90)) +
+  theme(axis.text.x = element_text(angle=90),
+        strip.text.y = element_text(angle = 90)) +
   labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA (%)") +
-  facet_grid("scan="+scanrate ~ "mu="+mut),
+  facet_grid(scanrate+"scan=" ~ "mu="+mut),
 ggplot(df_mean[df_mean$expt==expt.labels[3] & df_mean$social=="DNA-bearing",], 
        aes(x=target, y=swap, label=round(avdamage, digits=1), fill=avdamage)) + 
   geom_tile() + geom_text(size=2,color="#FFFFFF88") + scale_fill_viridis() +
-  theme(axis.text.x = element_text(angle=90)) +
+  theme(axis.text.x = element_text(angle=90),
+        strip.text.y = element_text(angle = 90)) +
   labs(x="Targetting rule", y="Exchange rule\n(DNA-bearing mitos fuse)", fill="Proportion\ndamaged\nmtDNA (%)") +
-  facet_grid("scan="+scanrate ~ "mu="+mut) )
-fig.s3 = ggarrange(plotlist=fig.s3.list[1:2], nrow=2, labels=c("BER pathway", "TR pathway"), label.y = 1.05 )
+  facet_grid(scanrate+"scan=" ~ "mu="+mut) )
+fig.s3 = ggarrange(plotlist=fig.s3.list[1:2], nrow=2, labels=c("BER", "TR")) #, label.y = 1.05 )
 #fig.s3 = ggarrange(plotlist=fig.s3.list[1:3], nrow=3, labels=c("A", "B", "C"))
 
 fig.s3
@@ -345,7 +348,8 @@ fig.4.new =
     colours = c("black", "blue", "yellow", "red"),
     values = c(0, 1, 50, 100) / 100
   ) +
-  theme(axis.text.x = element_text(angle = 90)) +
+  theme(axis.text.x = element_text(angle = 90),
+        strip.text.y = element_text(angle = 90)) +
   labs(x = "Targetting rule", y = "Exchange rule", fill = "Proportion\ndamaged\nmtDNA (%)")
 fig.4.new
 
@@ -411,4 +415,27 @@ ggsave("max-fig-s0-v.png", fig.s0, width = 10, height=5)
 ggsave("max-fig-s1-v.png", fig.2, width = 7, height=5)
 ggsave("max-fig-s2-v.png", fig.3, width = 7, height=8)
 ggsave("max-fig-s3-v.png", fig.s3, width = 7, height=9)
+
+# display behaviour of different transport regimes
+df = data.frame()
+tmp = data.frame(rho = 1:50)
+tmp$t = tmp$rho / 1
+tmp$label = "Traffic"
+df = rbind(df, tmp)
+tmp = data.frame(rho = 1:50)
+tmp$t = tmp$rho**2 / (2*40)
+tmp$label = "Diffuse n=1"
+df = rbind(df, tmp)
+tmp = data.frame(rho = 1:50)
+tmp$t = tmp$rho**2 / (2*(40/(5**(1/3))))
+tmp$label = "Diffuse n=5"
+df = rbind(df, tmp)
+
+sf = 2
+png("transport.png", width=400*sf, height=240*sf, res=72*sf)
+ggplot(df, aes(x=rho, y=t, color=label)) +
+  geom_line(size=2) +
+  labs(x = "Distance / μm", y = "Time / s", color="Dynamics") + 
+  theme_classic()
+dev.off()       
 

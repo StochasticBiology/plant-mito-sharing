@@ -934,6 +934,8 @@ int main(int argc, char *argv[])
   // i.e. each mito has 1 fusion events per 1hr unit
   // LIFE = 30h = 30 units
 
+  // adopt 1hr as time unit in sims
+  
   sprintf(fstr, "sim-damage-update-%i-%i.csv", EXPTlabel, CHOOSE_RANDOM);
   fp = fopen(fstr, "w");
   fprintf(fp, "scanrate,mut,target,swap,social,nfuse,life,expression,import,rep,t,completes,completes2,avprot,avdna,avprotempty,avprotfull,maxdna,onedna,freesubs,avdamage\n");
